@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use structopt::StructOpt;
+use serde::Deserialize;
 
 #[derive(Debug)]
 enum ModLoader {
@@ -56,12 +57,46 @@ struct Cdl {
     query: String,
 }
 
-fn main() {
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SearchResult {
+    id: u32,
+    name: String,
+    authors: Vec<Author>,
+    website_url: String,
+
+    #[serde(rename = "gameVersionLatestFiles")]
+    game_files: Vec<GameFile>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Author {
+    name: String,
+    url: String,
+    id: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GameFile {
+    game_version: String,
+    project_file_id: u32,
+    project_file_name: String,
+    file_type: u8,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), reqwest::Error> {
     let cdl = Cdl::from_args();
-
-    // simulate request
     let url = url(&cdl.game_version, &cdl.query);
+    let result = reqwest::get(&url)
+        .await?
+        .json::<Vec<SearchResult>>()
+        .await?;
 
-    println!("{}", &url);
+
+    println!("{:?}", result);
+
+    Ok(())
 } 
 
