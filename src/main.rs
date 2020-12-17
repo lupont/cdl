@@ -1,6 +1,10 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    fmt::{Display, Formatter},
+};
 use structopt::StructOpt;
-use serde::Deserialize;
+
+mod models;
 
 #[derive(Debug)]
 enum ModLoader {
@@ -18,25 +22,62 @@ impl FromStr for ModLoader {
             "fabric" => Ok(Self::Fabric),
             "both"   => Ok(Self::Both),
 
-            s        => Err(format!("{} not a valid mod loader", s)),
+            s        => Err(format!("'{}' not a valid mod loader", s)),
         }
+    }
+}
+
+#[derive(Debug)]
+enum SortType {
+    TotalDownloads,
+    Popularity,
+    Name,
+    LastUpdated,
+    DateCreated,
+}
+
+impl FromStr for SortType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "downloads"  => Ok(Self::TotalDownloads),
+            "popularity" => Ok(Self::Popularity),
+            "name"       => Ok(Self::Name),
+            "updated"    => Ok(Self::LastUpdated),
+            "created"    => Ok(Self::DateCreated),
+
+            s            => Err(format!("'{}' not a valid sort type", s)),
+        }
+    }
+}
+
+impl Display for SortType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match &self {
+            &SortType::TotalDownloads => "TotalDownloads",
+            &SortType::Popularity     => "Popularity",
+            &SortType::Name           => "Name",
+            &SortType::LastUpdated    => "LastUpdated",
+            &SortType::DateCreated    => "DateCreated",
+        })
     }
 }
 
 const BASE_URL: &str = "https://addons-ecs.forgesvc.net/api/v2/addon";
 
-fn url(version: &str, query: &str) -> String {
+fn url(cdl: &Cdl) -> String {
     format!(
-        "{base}/search?categoryId={categoryID}&gameId={gameId}&gameVersion={gameVersion}&index={index}&pageSize={pageSize}5&searchFilter={searchFilter}&sectionId={sectionId}&sort={sort}", 
-        base         = BASE_URL,
-        categoryID   = 0,
-        gameId       = 432,
-        gameVersion  = version,
-        index        = 0,
-        pageSize     = 9,
-        searchFilter = query,
-        sectionId    = 6,
-        sort         = "TotalDownloads"
+        "{base}/search?categoryId={category_id}&gameId={game_id}&gameVersion={game_version}&index={index}&pageSize={page_size}5&searchFilter={search_filter}&sectionId={section_id}&sort={sort}", 
+        base          = BASE_URL,
+        category_id   = 0,
+        game_id       = 432,
+        game_version  = cdl.game_version,
+        index         = 0,
+        page_size     = 9,
+        search_filter = cdl.query,
+        section_id    = 6,
+        sort          = cdl.sort,
     )
 }
 
@@ -53,49 +94,33 @@ struct Cdl {
     #[structopt(short = "v", long, default_value = "1.16.4")]
     game_version: String,
 
+    #[structopt(short, long, default_value = "popularity")]
+    sort: SortType,
+
     #[structopt(parse(from_str = parse_query))]
     query: String,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SearchResult {
-    id: u32,
-    name: String,
-    authors: Vec<Author>,
-    website_url: String,
-
-    #[serde(rename = "gameVersionLatestFiles")]
-    game_files: Vec<GameFile>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Author {
-    name: String,
-    url: String,
-    id: u32,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GameFile {
-    game_version: String,
-    project_file_id: u32,
-    project_file_name: String,
-    file_type: u8,
+fn print_mod((index, result): (usize, models::SearchResult)) {
+    println!("{}: {}", index + 1, result.name);
+    println!("\t{}", result.website_url);
+    println!("\t{:?}", result.game_files.iter().map(|g| &g.game_version).collect::<Vec<_>>());
 }
 
 #[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {
     let cdl = Cdl::from_args();
-    let url = url(&cdl.game_version, &cdl.query);
+    let url = url(&cdl);
     let result = reqwest::get(&url)
         .await?
-        .json::<Vec<SearchResult>>()
+        .json::<Vec<models::SearchResult>>()
         .await?;
 
+    println!("{}", &url);
 
-    println!("{:?}", result);
+    result.into_iter()
+        .enumerate()
+        .for_each(print_mod);
 
     Ok(())
 } 
