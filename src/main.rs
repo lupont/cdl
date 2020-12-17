@@ -68,13 +68,13 @@ const BASE_URL: &str = "https://addons-ecs.forgesvc.net/api/v2/addon";
 
 fn url(cdl: &Cdl) -> String {
     format!(
-        "{base}/search?categoryId={category_id}&gameId={game_id}&gameVersion={game_version}&index={index}&pageSize={page_size}5&searchFilter={search_filter}&sectionId={section_id}&sort={sort}", 
+        "{base}/search?categoryId={category_id}&gameId={game_id}&gameVersion={game_version}&index={index}&pageSize={page_size}&searchFilter={search_filter}&sectionId={section_id}&sort={sort}", 
         base          = BASE_URL,
         category_id   = 0,
         game_id       = 432,
         game_version  = cdl.game_version,
         index         = 0,
-        page_size     = 9,
+        page_size     = cdl.amount,
         search_filter = cdl.query,
         section_id    = 6,
         sort          = cdl.sort,
@@ -96,6 +96,9 @@ struct Cdl {
 
     #[structopt(short, long, default_value = "popularity")]
     sort: SortType,
+
+    #[structopt(short, long, default_value = "9")]
+    amount: u8,
 
     #[structopt(parse(from_str = parse_query))]
     query: String,
