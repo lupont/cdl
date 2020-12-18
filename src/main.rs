@@ -8,10 +8,12 @@ use std::{
 use structopt::StructOpt;
 
 mod cdl;
+mod config;
 mod models;
 mod url;
 
 use cdl::Cdl;
+use config::Config;
 
 fn print_mod((index, result): (usize, &models::SearchResult)) {
     println!(
@@ -22,14 +24,15 @@ fn print_mod((index, result): (usize, &models::SearchResult)) {
         if result.is_fabric() { "[FABRIC]" } else { "" }
     );
     println!("\t{}", result.website_url);
-    println!("\t{}", result.description);
+    println!("\t{}\n", result.description);
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let cdl = Cdl::from_args();
+    let config = Config::from_cdl(&cdl);
     let client = Client::new();
-    let url = url::search_url(&cdl);
+    let url = url::search_url(&config, &cdl.query);
 
     let mut search_results = client
         .get(&url)
@@ -48,6 +51,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+
+    println!(
+        "Searching {} mods for {} including '{}':",
+        config.mod_loader.to_string(),
+        config.game_version,
+        cdl.query,
+    );
 
     search_results.iter().enumerate().for_each(print_mod);
 
@@ -85,20 +95,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn download<T>(client: &Client, url: T, file_name: &str) -> Result<(), Box<dyn Error>>
-where
-    T: IntoUrl,
-{
-    println!("creating file...");
+async fn download<T: IntoUrl>(
+    client: &Client,
+    url: T,
+    file_name: &str,
+) -> Result<(), Box<dyn Error>> {
     let mut dest = File::create(file_name)?;
-    println!("creation done.");
-    println!("getting request...");
     let source = client.get(url).send().await?.text().await?;
-    println!("get request done.");
-    println!("copying...");
     copy(&mut source.as_bytes(), &mut dest)?;
-    println!("copying done.");
-
     Ok(())
 }
 

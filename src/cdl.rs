@@ -4,7 +4,7 @@ use std::{
 };
 use structopt::StructOpt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ModLoader {
     Forge,
     Fabric,
@@ -25,7 +25,17 @@ impl FromStr for ModLoader {
     }
 }
 
-#[derive(Debug)]
+impl ToString for ModLoader {
+    fn to_string(&self) -> String {
+        match self {
+            &ModLoader::Forge => "Forge".into(),
+            &ModLoader::Fabric => "Fabric".into(),
+            &ModLoader::Both => "Forge/Fabric".into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum SortType {
     TotalDownloads,
     Popularity,
@@ -76,18 +86,28 @@ fn parse_query(src: &str) -> String {
     about = "A command-line utility for downloading Minecraft mods."
 )]
 pub struct Cdl {
-    #[structopt(short = "l", long, default_value = "forge")]
+    #[structopt(short = "l", long, default_value = "forge", possible_values = &["forge", "fabric", "both"], help = "The mod loader to use when searching.")]
     pub mod_loader: ModLoader,
 
-    #[structopt(short = "v", long, default_value = "1.16.4")]
+    #[structopt(
+        short = "v",
+        long,
+        default_value = "1.16.4",
+        help = "The version of the game."
+    )]
     pub game_version: String,
 
-    #[structopt(short, long, default_value = "popularity")]
+    #[structopt(short, long, default_value = "popularity", possible_values = &["downloads", "popularity", "name", "updated", "created"], help = "The ordering of search results.")]
     pub sort: SortType,
 
-    #[structopt(short, long, default_value = "9")]
+    #[structopt(
+        short,
+        long,
+        default_value = "9",
+        help = "The amount of search results to show."
+    )]
     pub amount: u8,
 
-    #[structopt(parse(from_str = parse_query))]
+    #[structopt(parse(from_str = parse_query), help = "The query to search for.")]
     pub query: String,
 }
