@@ -17,9 +17,7 @@ pub struct SearchResult {
 
 impl SearchResult {
     pub fn get_file_by_version(&self, version: &str) -> Option<&GameFile> {
-        self.game_files
-            .iter()
-            .find(|f| f.game_version == version)
+        self.game_files.iter().find(|f| f.game_version == version)
     }
 
     pub fn author_names(&self) -> String {
@@ -70,4 +68,3 @@ pub struct Dependency {
     #[serde(rename = "type")]
     pub dep_type: u32,
 }
-

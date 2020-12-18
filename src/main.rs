@@ -1,200 +1,114 @@
-use std::{
-    fmt::{Display, Formatter},
-    io::{stdin, stdout, Write},
-    str::FromStr,
-};
 use async_recursion::async_recursion;
+use reqwest::{Client, IntoUrl};
+use std::{
+    error::Error,
+    fs::File,
+    io::{copy, stdin, stdout, Write},
+};
 use structopt::StructOpt;
 
+mod cdl;
 mod models;
+mod url;
 
-#[derive(Debug)]
-enum ModLoader {
-    Forge,
-    Fabric,
-    Both,
-}
-
-impl FromStr for ModLoader {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "forge"  => Ok(Self::Forge),
-            "fabric" => Ok(Self::Fabric),
-            "both"   => Ok(Self::Both),
-
-            s        => Err(format!("'{}' not a valid mod loader", s)),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum SortType {
-    TotalDownloads,
-    Popularity,
-    Name,
-    LastUpdated,
-    DateCreated,
-}
-
-impl FromStr for SortType {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "downloads"  => Ok(Self::TotalDownloads),
-            "popularity" => Ok(Self::Popularity),
-            "name"       => Ok(Self::Name),
-            "updated"    => Ok(Self::LastUpdated),
-            "created"    => Ok(Self::DateCreated),
-
-            s            => Err(format!("'{}' not a valid sort type", s)),
-        }
-    }
-}
-
-impl Display for SortType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match &self {
-            &SortType::TotalDownloads => "TotalDownloads",
-            &SortType::Popularity     => "Popularity",
-            &SortType::Name           => "Name",
-            &SortType::LastUpdated    => "LastUpdated",
-            &SortType::DateCreated    => "DateCreated",
-        })
-    }
-}
-
-const BASE_URL: &str = "https://addons-ecs.forgesvc.net/api/v2/addon";
-
-fn search_url(cdl: &Cdl) -> String {
-    format!(
-        "{base}/search?categoryId={category_id}&gameId={game_id}&gameVersion={game_version}&index={index}&pageSize={page_size}&searchFilter={search_filter}&sectionId={section_id}&sort={sort}", 
-        base          = BASE_URL,
-        category_id   = 0,
-        game_id       = 432,
-        game_version  = cdl.game_version,
-        index         = 0,
-        page_size     = cdl.amount,
-        search_filter = cdl.query,
-        section_id    = 6,
-        sort          = cdl.sort,
-    )
-}
-
-fn mod_url(mod_id: u32) -> String {
-    format!(
-        "{base}/{mod_id}",
-        base   = BASE_URL,
-        mod_id = mod_id,
-    )
-}
-
-fn info_url(mod_id: u32, file_id: u32) -> String {
-    format!(
-        "{base}/{mod_id}/file/{file_id}",
-        base    = BASE_URL,
-        mod_id  = mod_id,
-        file_id = file_id,
-    )
-}
-
-fn parse_query(src: &str) -> String {
-    src.replace(" ", "%20").into()
-}
-
-#[derive(StructOpt, Debug)]
-#[structopt(name = "cdl", about = "A command-line utility for downloading Minecraft mods.")]
-struct Cdl {
-    #[structopt(short = "l", long, default_value = "forge")]
-    mod_loader: ModLoader,
-
-    #[structopt(short = "v", long, default_value = "1.16.4")]
-    game_version: String,
-
-    #[structopt(short, long, default_value = "popularity")]
-    sort: SortType,
-
-    #[structopt(short, long, default_value = "9")]
-    amount: u8,
-
-    #[structopt(parse(from_str = parse_query))]
-    query: String,
-}
+use cdl::Cdl;
 
 fn print_mod((index, result): (usize, &models::SearchResult)) {
-    println!("{}: {} by {}", index + 1, result.name, result.author_names());
+    println!(
+        "{}: {} by {}",
+        index + 1,
+        result.name,
+        result.author_names()
+    );
     println!("\t{}", result.website_url);
     println!("\t{}", result.description);
-    println!("\t{}", result.id);
-    println!("\t{:?}", result.get_file_by_version("1.16.4"));
 }
 
 #[tokio::main]
-async fn main() -> Result<(), reqwest::Error> {
+async fn main() -> Result<(), Box<dyn Error>> {
     let cdl = Cdl::from_args();
-    let url = search_url(&cdl);
+    let client = Client::new();
+    let url = url::search_url(&cdl);
 
-    let result = reqwest::get(&url)
+    let search_results = client
+        .get(&url)
+        .send()
         .await?
         .json::<Vec<models::SearchResult>>()
         .await?;
 
-    result.iter()
-        .enumerate()
-        .for_each(print_mod);
+    search_results.iter().enumerate().for_each(print_mod);
 
     print!("==> ");
-    if let Err(_) = stdout().flush() {}
+    stdout().flush()?;
 
     let input = {
         let mut tmp = String::new();
-        let stdin = stdin();
-
-        match stdin.read_line(&mut tmp) {
-            Ok(_)  => tmp.trim().into(),
-            Err(_) => String::new(),
-        }
+        stdin().read_line(&mut tmp)?;
+        tmp.trim().to_string()
     };
 
-    let input = parse_input(&input);
+    let input = parse_input(&input).ok_or("")?;
 
-    if let Some(input) = input {
-        let mods = result.into_iter()
-            .enumerate()
-            .filter(|(i, _)| input.contains(&(i + 1)))
-            .map(|(_, r)| r)
-            .collect::<Vec<_>>();
+    let mods = search_results
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| input.contains(&(i + 1)))
+        .map(|(_, r)| r)
+        .collect::<Vec<_>>();
 
-        for moddy in mods {
-            let m = get_with_dependencies(&cdl, moddy.id).await?;
-            let (first, rest) = m.split_first().unwrap();
-            println!("<== Downloading {}...", first.display_name);
-            for r in rest {
-                println!("\t<== Downloading dependency {}...", r.display_name);
-            }
+    for moddy in mods {
+        let m = get_with_dependencies(&cdl, &client, moddy.id).await?;
+        let (first, rest) = m.split_first().ok_or("mod list was empty")?;
+
+        println!("<== Downloading {}...", first.display_name);
+        download(&client, &first.download_url, &first.file_name).await?;
+
+        for r in rest {
+            println!("\t<== Downloading dependency {}...", r.display_name);
+            download(&client, &r.download_url, &r.file_name).await?;
         }
     }
 
     Ok(())
-} 
+}
+
+async fn download<T>(client: &Client, url: T, file_name: &str) -> Result<(), Box<dyn Error>>
+where
+    T: IntoUrl,
+{
+    let mut dest = File::create(file_name)?;
+    let source = client.get(url).send().await?.text().await?;
+    copy(&mut source.as_bytes(), &mut dest)?;
+
+    Ok(())
+}
 
 #[async_recursion]
-async fn get_with_dependencies(cdl: &Cdl, mod_id: u32) -> Result<Vec<models::ModInfo>, reqwest::Error> {
-    let url = mod_url(mod_id);
-    let result = reqwest::get(&url)
+async fn get_with_dependencies(
+    cdl: &Cdl,
+    client: &Client,
+    mod_id: u32,
+) -> Result<Vec<models::ModInfo>, reqwest::Error> {
+    let url = url::mod_url(mod_id);
+    let result = client
+        .get(&url)
+        .send()
         .await?
         .json::<models::SearchResult>()
         .await?;
 
-    let file_id = result.get_file_by_version(&cdl.game_version).map(|o| o.project_file_id);
+    let file_id = result
+        .get_file_by_version(&cdl.game_version)
+        .map(|o| o.project_file_id);
 
     if let None = file_id {
         return Ok(vec![]);
     }
 
-    let file = reqwest::get(&info_url(result.id, file_id.unwrap()))
+    let file = client
+        .get(&url::info_url(result.id, file_id.unwrap()))
+        .send()
         .await?
         .json::<models::ModInfo>()
         .await?;
@@ -202,9 +116,9 @@ async fn get_with_dependencies(cdl: &Cdl, mod_id: u32) -> Result<Vec<models::Mod
     let mut mods: Vec<models::ModInfo> = vec![];
 
     for dep in file.dependencies.iter().filter(|&d| d.dep_type == 3) {
-        let foo = get_with_dependencies(cdl, dep.addon_id).await?;
+        let foo = get_with_dependencies(cdl, client, dep.addon_id).await?;
         mods.extend(foo);
-    } 
+    }
 
     mods.insert(0, file);
 
@@ -212,7 +126,8 @@ async fn get_with_dependencies(cdl: &Cdl, mod_id: u32) -> Result<Vec<models::Mod
 }
 
 fn parse_input(input: &str) -> Option<Vec<usize>> {
-    let foo = input.split(' ')
+    let foo = input
+        .split(' ')
         .filter_map(|s| s.parse().ok())
         .collect::<Vec<_>>();
 
@@ -222,9 +137,9 @@ fn parse_input(input: &str) -> Option<Vec<usize>> {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use super::parse_input;
-
+    use super::*;
     #[test]
     fn parse_input_one_argument() {
         let input = "1";
@@ -261,4 +176,3 @@ mod tests {
         assert_eq!(parse_input(input), Some(vec![1, 2, 4]));
     }
 }
-
