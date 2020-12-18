@@ -15,10 +15,11 @@ use cdl::Cdl;
 
 fn print_mod((index, result): (usize, &models::SearchResult)) {
     println!(
-        "{}: {} by {}",
+        "{}: {} by {} {}",
         index + 1,
         result.name,
-        result.author_names()
+        result.author_names(),
+        if result.is_fabric() { "[FABRIC]" } else { "" }
     );
     println!("\t{}", result.website_url);
     println!("\t{}", result.description);
@@ -30,12 +31,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let client = Client::new();
     let url = url::search_url(&cdl);
 
-    let search_results = client
+    let mut search_results = client
         .get(&url)
         .send()
         .await?
         .json::<Vec<models::SearchResult>>()
         .await?;
+
+    {
+        let mut i = 0;
+        while i != search_results.len() {
+            if &cdl.mod_loader == &cdl::ModLoader::Forge && search_results[i].is_fabric() {
+                search_results.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
 
     search_results.iter().enumerate().for_each(print_mod);
 
@@ -77,9 +89,15 @@ async fn download<T>(client: &Client, url: T, file_name: &str) -> Result<(), Box
 where
     T: IntoUrl,
 {
+    println!("creating file...");
     let mut dest = File::create(file_name)?;
+    println!("creation done.");
+    println!("getting request...");
     let source = client.get(url).send().await?.text().await?;
+    println!("get request done.");
+    println!("copying...");
     copy(&mut source.as_bytes(), &mut dest)?;
+    println!("copying done.");
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -7,6 +7,8 @@ pub struct SearchResult {
 
     #[serde(rename = "summary")]
     pub description: String,
+
+    pub categories: Vec<Category>,
 
     #[serde(rename = "gameVersionLatestFiles")]
     pub game_files: Vec<GameFile>,
@@ -33,6 +35,12 @@ impl SearchResult {
             .expect("expected author string to end with a semicolon")
             .into()
     }
+
+    pub fn is_fabric(&self) -> bool {
+        self.categories
+            .iter()
+            .any(|c| c.category_id == Category::fabric_id())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,6 +48,20 @@ pub struct Author {
     pub name: String,
     pub url: String,
     pub id: u32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Category {
+    pub category_id: u32,
+    pub name: String,
+    pub url: String,
+}
+
+impl Category {
+    pub fn fabric_id() -> u32 {
+        4780
+    }
 }
 
 #[derive(Debug, Deserialize)]

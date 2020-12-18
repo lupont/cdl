@@ -4,7 +4,7 @@ use std::{
 };
 use structopt::StructOpt;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ModLoader {
     Forge,
     Fabric,
