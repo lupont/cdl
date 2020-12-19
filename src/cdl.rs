@@ -108,6 +108,9 @@ pub struct Cdl {
     )]
     pub amount: u8,
 
+    #[structopt(short, long)]
+    pub github_repo: bool,
+
     #[structopt(parse(from_str = parse_query), help = "The query to search for.")]
     pub query: String,
 }
