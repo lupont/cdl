@@ -15,16 +15,16 @@ mod url;
 use cdl::Cdl;
 use config::Config;
 
-fn print_mod((index, result): (usize, &models::SearchResult)) {
+fn print_mod(max_len: usize, (index, result): (usize, &models::SearchResult)) {
     println!(
-        "{}: {} by {} {}",
-        index + 1,
-        result.name,
-        result.author_names(),
-        if result.is_fabric() { "[FABRIC]" } else { "" }
+        "> {index}{space1}{name} {space2}{authors} {fabric}",
+        index = index + 1,
+        space1 = " ".repeat(6 - (index + 1).to_string().len() + 1),
+        name = result.name,
+        space2 = " ".repeat(max_len - result.name.len() + 1),
+        authors = result.author_names(),
+        fabric = if result.is_fabric() { "[FABRIC]" } else { "" }
     );
-    println!("\t{}", result.website_url);
-    println!("\t{}\n", result.description);
 }
 
 #[tokio::main]
@@ -52,14 +52,36 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    if search_results.len() == 0 {
+        println!(
+            "No {} mods for {} including '{}' found.",
+            config.mod_loader.to_string(),
+            config.game_version,
+            cdl.query
+        );
+        return Ok(());
+    }
+
+    let max_len = search_results
+        .iter()
+        .fold(0, |a, c| if c.name.len() > a { c.name.len() } else { a });
+
     println!(
-        "Searching {} mods for {} including '{}':",
+        "  INDEX  NAME{} AUTHOR",
+        " ".repeat(if max_len < 3 { 1 } else { max_len - 3 }),
+    );
+
+    search_results
+        .iter()
+        .enumerate()
+        .for_each(|m| print_mod(max_len, m));
+
+    println!(
+        "Searched {} mods for {} including '{}'.",
         config.mod_loader.to_string(),
         config.game_version,
         cdl.query,
     );
-
-    search_results.iter().enumerate().for_each(print_mod);
 
     print!("==> ");
     stdout().flush()?;
@@ -70,7 +92,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tmp.trim().to_string()
     };
 
-    let input = parse_input(&input).ok_or("")?;
+    let input = match parse_input(&input) {
+        Some(input) => input,
+        None => {
+            println!("There's nothing to do.");
+            return Ok(());
+        }
+    };
 
     let mods = search_results
         .into_iter()
@@ -83,12 +111,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let m = get_with_dependencies(&cdl, &client, moddy.id).await?;
         let (first, rest) = m.split_first().ok_or("mod list was empty")?;
 
-        println!("<== Downloading {}...", first.display_name);
-        download(&client, &first.download_url, &first.file_name).await?;
+        print!("<== Downloading {}...", first.file_name);
+        match download(&client, &first.download_url, &first.file_name).await {
+            Ok(_) => println!(" done!"),
+            Err(_) => println!(" An error occured."),
+        }
 
         for r in rest {
-            println!("\t<== Downloading dependency {}...", r.display_name);
-            download(&client, &r.download_url, &r.file_name).await?;
+            print!("    Downloading {}...", r.file_name);
+            match download(&client, &r.download_url, &r.file_name).await {
+                Ok(_) => println!(" done!"),
+                Err(_) => println!(" An error occured."),
+            }
         }
     }
 
