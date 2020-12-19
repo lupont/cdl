@@ -107,20 +107,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .map(|(_, r)| r)
         .collect::<Vec<_>>();
 
+    let mut already_downloaded: Vec<u32> = vec![];
+
     for moddy in mods {
         let m = get_with_dependencies(&cdl, &client, moddy.id).await?;
         let (first, rest) = m.split_first().ok_or("mod list was empty")?;
 
         print!("<== Downloading {}...", first.file_name);
         match download(&client, &first.download_url, &first.file_name).await {
-            Ok(_) => println!(" done!"),
+            Ok(_) => {
+                println!(" done!");
+                already_downloaded.push(first.id);
+            }
             Err(_) => println!(" An error occured."),
         }
 
         for r in rest {
+            if already_downloaded.contains(&r.id) {
+                println!("    {} already downloaded.", r.file_name);
+                continue;
+            }
+
             print!("    Downloading {}...", r.file_name);
             match download(&client, &r.download_url, &r.file_name).await {
-                Ok(_) => println!(" done!"),
+                Ok(_) => {
+                    println!(" done!");
+                    already_downloaded.push(r.id);
+                }
                 Err(_) => println!(" An error occured."),
             }
         }
@@ -190,45 +203,5 @@ fn parse_input(input: &str) -> Option<Vec<usize>> {
     match foo.len() {
         0 => None,
         _ => Some(foo),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn parse_input_one_argument() {
-        let input = "1";
-        assert_eq!(parse_input(input), Some(vec![1]));
-    }
-
-    #[test]
-    fn parse_input_two_arguments() {
-        let input = "1 2";
-        assert_eq!(parse_input(input), Some(vec![1, 2]));
-    }
-
-    #[test]
-    fn parse_input_two_arguments_long() {
-        let input = "11 12";
-        assert_eq!(parse_input(input), Some(vec![11, 12]));
-    }
-
-    #[test]
-    fn parse_input_long_argument() {
-        let input = "13";
-        assert_eq!(parse_input(input), Some(vec![13]));
-    }
-
-    #[test]
-    fn parse_input_invalid() {
-        let input = "hej";
-        assert_eq!(parse_input(input), None);
-    }
-
-    #[test]
-    fn parse_input_invalid_somewhere_ignores_error() {
-        let input = "1 2 f 4";
-        assert_eq!(parse_input(input), Some(vec![1, 2, 4]));
     }
 }
