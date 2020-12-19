@@ -148,8 +148,8 @@ async fn download<T: IntoUrl>(
     file_name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let mut dest = File::create(file_name)?;
-    let source = client.get(url).send().await?.text().await?;
-    copy(&mut source.as_bytes(), &mut dest)?;
+    let source = client.get(url).send().await?.bytes().await?;
+    copy(&mut source.as_ref(), &mut dest)?;
     Ok(())
 }
 
