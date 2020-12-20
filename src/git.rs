@@ -1,18 +1,18 @@
-use git2::{Branch, BranchType, Branches, Repository};
+use git2::{Branch, Repository};
 use std::{
     error::Error,
     fmt::{Display, Formatter},
-    fs::{self, DirEntry},
-    num::ParseIntError,
+    fs,
+    io::{self, stdin, stdout, Write},
     path::Path,
     process::{Command, Stdio},
 };
 
 #[derive(Debug)]
 pub enum GitError {
-    DirCreationError(std::io::Error),
+    DirCreationError(io::Error),
     RepositoryError(git2::Error),
-    InvalidBranchError(ParseIntError),
+    InvalidBranchError,
 }
 
 impl Display for GitError {
@@ -23,8 +23,8 @@ impl Display for GitError {
 
 impl Error for GitError {}
 
-impl From<std::io::Error> for GitError {
-    fn from(e: std::io::Error) -> Self {
+impl From<io::Error> for GitError {
+    fn from(e: io::Error) -> Self {
         Self::DirCreationError(e)
     }
 }
@@ -56,17 +56,18 @@ pub fn checkout(repo: &mut Repository, branch_name: &str) -> Result<(), GitError
 
 pub fn execute_gradlew(repo: &Repository) -> Result<(), GitError> {
     let dir = repo.workdir();
-    if let Some(dir) = dir {
-        let _ = Command::new("sh")
-            .current_dir(dir)
-            .arg("-c")
-            .arg("./gradlew build")
-            .stdout(Stdio::inherit())
-            .output()?;
-        println!("Succes!!!!!!!!!!");
+    match dir {
+        Some(dir) => {
+            let _ = Command::new("sh")
+                .current_dir(dir)
+                .arg("-c")
+                .arg("./gradlew build")
+                .stdout(Stdio::inherit())
+                .output()?;
+            Ok(())
+        }
+        None => Ok(()),
     }
-
-    Ok(())
 }
 
 pub fn copy_compiled_mod(repo: &Repository) -> Result<(), GitError> {
@@ -75,18 +76,26 @@ pub fn copy_compiled_mod(repo: &Repository) -> Result<(), GitError> {
     if let Some(dir) = dir {
         let build_dir = Path::join(dir, "build/libs");
         if build_dir.is_dir() {
-            println!("Found these jars:");
             let files = fs::read_dir(build_dir)?
                 .filter_map(Result::ok)
                 .collect::<Vec<_>>();
 
+            println!("  INDEX  FILE");
             for (i, file) in files.iter().enumerate() {
-                println!("{}: {}", i + 1, file.file_name().to_string_lossy());
+                println!(
+                    "> {}     {}{}",
+                    i + 1,
+                    if i + 1 < 10 { " " } else { "" },
+                    file.file_name().to_string_lossy()
+                );
             }
+
+            print!("==> ");
+            stdout().flush()?;
 
             let input = {
                 let mut tmp = String::new();
-                std::io::stdin().read_line(&mut tmp)?;
+                stdin().read_line(&mut tmp)?;
                 tmp.trim().to_string()
             };
             let input = crate::parse_input(&input);
@@ -111,9 +120,26 @@ pub fn copy_compiled_mod(repo: &Repository) -> Result<(), GitError> {
     Ok(())
 }
 
+#[allow(dead_code)]
+fn pull(repo: &Repository, branch_name: &str) -> Result<(), GitError> {
+    let mut origin_remote = repo.find_remote("origin")?;
+    origin_remote.fetch(&[branch_name], None, None)?;
+    let oid = repo.refname_to_id(&format!("refs/remotes/origin/{}", branch_name))?;
+    let object = repo.find_object(oid, None)?;
+    repo.reset(&object, git2::ResetType::Hard, None)?;
+    Ok(())
+}
+
 pub fn clone(url: &str) -> Result<Repository, GitError> {
     let full_url = format!("https://github.com/{}", url);
     let local_dir = Path::join(Path::new("/tmp/cdl/"), url);
+
+    if let Ok(repo) = Repository::open(&local_dir) {
+        // let branch_name = repo.find_branch
+        // pull(repo, branch_name)?;
+        return Ok(repo);
+    }
+
     Repository::clone(&full_url, &local_dir).map_err(|e| GitError::RepositoryError(e))
 }
 
@@ -126,32 +152,37 @@ pub fn choose_branch(repo: &Repository) -> Result<String, GitError> {
         .enumerate()
         .collect::<Vec<(usize, Branch)>>();
 
+    println!("  INDEX  BRANCH");
     for (i, branch) in &branches {
         let name = branch.name().unwrap();
         if let Some(name) = name {
-            println!("{}: {}", i + 1, name);
+            println!(
+                "> {}     {}{}",
+                i + 1,
+                if i + 1 < 10 { " " } else { "" },
+                name
+            );
         }
     }
 
+    print!("==> ");
+    stdout().flush()?;
+
     let input = {
         let mut tmp = String::new();
-        std::io::stdin().read_line(&mut tmp)?;
+        stdin().read_line(&mut tmp)?;
         tmp.trim().to_string()
     };
 
     match input.parse::<usize>() {
-        Ok(n) => {
-            if n > 0 && n <= branches.len() {
-                let branch = &branches[n - 1].1;
-                return Ok(branch.name().unwrap().unwrap().into());
-            } else {
-                panic!("invalid branch index");
-            }
+        Ok(n) if n > 0 && n <= branches.len() => {
+            let branch = &branches[n - 1].1;
+            return Ok(branch.name().unwrap().unwrap().into());
         }
 
-        Err(e) => {
+        _ => {
             println!("There's nothing to do.");
-            return Err(GitError::InvalidBranchError(e));
+            return Err(GitError::InvalidBranchError);
         }
     }
 }
