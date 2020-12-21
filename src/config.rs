@@ -1,5 +1,7 @@
 use crate::cdl::{ModLoader, SortType};
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::fmt;
 use std::fs;
 use std::path::Path;
 
@@ -8,11 +10,11 @@ pub enum ConfigError {
     IoError(std::io::Error),
     TomlSerializeError(toml::ser::Error),
     TomlDeserializeError(toml::de::Error),
-    VarError(std::env::VarError),
+    VarError(env::VarError),
 }
 
-impl std::fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}",
@@ -46,8 +48,8 @@ impl From<toml::de::Error> for ConfigError {
     }
 }
 
-impl From<std::env::VarError> for ConfigError {
-    fn from(e: std::env::VarError) -> Self {
+impl From<env::VarError> for ConfigError {
+    fn from(e: env::VarError) -> Self {
         Self::VarError(e)
     }
 }
@@ -62,7 +64,7 @@ pub struct Config {
 
 impl Config {
     pub fn load() -> Result<Self, ConfigError> {
-        let home_dir = &std::env::var("HOME")?;
+        let home_dir = &env::var("HOME")?;
         let config_dir = Path::join(Path::new(&home_dir), ".config/cdl");
         let config_file = Path::new("cdl.toml");
         let config_path = Path::join(&config_dir, config_file);
@@ -71,10 +73,10 @@ impl Config {
             fs::create_dir_all(config_dir)?;
             let default = Self::default();
             let toml = toml::to_string(&default)?;
-            std::fs::write(&config_path, toml)?;
+            fs::write(&config_path, toml)?;
         }
 
-        let file = std::fs::read_to_string(config_path)?;
+        let file = fs::read_to_string(config_path)?;
         let config: Config = toml::from_str(&file)?;
 
         Ok(config)
