@@ -159,7 +159,7 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let cdl = Cdl::from_args();
-    let config = Config::from_cdl(&cdl);
+    let config = config::Config::load()?;
 
     if cdl.github_repo {
         handle_git(cdl)?;

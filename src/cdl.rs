@@ -1,10 +1,11 @@
+use serde::{Deserialize, Serialize};
 use std::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
 use structopt::StructOpt;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ModLoader {
     Forge,
     Fabric,
@@ -35,7 +36,7 @@ impl ToString for ModLoader {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SortType {
     TotalDownloads,
     Popularity,

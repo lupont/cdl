@@ -1,8 +1,58 @@
-use crate::{
-    cdl::{ModLoader, SortType},
-    Cdl,
-};
+use crate::cdl::{ModLoader, SortType};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::Path;
 
+#[derive(Debug)]
+pub enum ConfigError {
+    IoError(std::io::Error),
+    TomlSerializeError(toml::ser::Error),
+    TomlDeserializeError(toml::de::Error),
+    VarError(std::env::VarError),
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::IoError(e) => e.to_string(),
+                Self::TomlSerializeError(e) => e.to_string(),
+                Self::TomlDeserializeError(e) => e.to_string(),
+                Self::VarError(e) => e.to_string(),
+            }
+        )
+    }
+}
+
+impl std::error::Error for ConfigError {}
+
+impl From<std::io::Error> for ConfigError {
+    fn from(e: std::io::Error) -> Self {
+        Self::IoError(e)
+    }
+}
+
+impl From<toml::ser::Error> for ConfigError {
+    fn from(e: toml::ser::Error) -> Self {
+        Self::TomlSerializeError(e)
+    }
+}
+
+impl From<toml::de::Error> for ConfigError {
+    fn from(e: toml::de::Error) -> Self {
+        Self::TomlDeserializeError(e)
+    }
+}
+
+impl From<std::env::VarError> for ConfigError {
+    fn from(e: std::env::VarError) -> Self {
+        Self::VarError(e)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub game_version: String,
     pub mod_loader: ModLoader,
@@ -11,13 +61,23 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_cdl(cdl: &Cdl) -> Self {
-        Self {
-            game_version: cdl.game_version.clone().into(),
-            mod_loader: cdl.mod_loader.clone(),
-            sort_type: cdl.sort.clone(),
-            amount: cdl.amount,
+    pub fn load() -> Result<Self, ConfigError> {
+        let home_dir = &std::env::var("HOME")?;
+        let config_dir = Path::join(Path::new(&home_dir), ".config/cdl");
+        let config_file = Path::new("cdl.toml");
+        let config_path = Path::join(&config_dir, config_file);
+
+        if !config_path.exists() {
+            fs::create_dir_all(config_dir)?;
+            let default = Self::default();
+            let toml = toml::to_string(&default)?;
+            std::fs::write(&config_path, toml)?;
         }
+
+        let file = std::fs::read_to_string(config_path)?;
+        let config: Config = toml::from_str(&file)?;
+
+        Ok(config)
     }
 }
 
