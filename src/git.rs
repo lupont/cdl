@@ -3,7 +3,7 @@ use std::{
     error::Error,
     fmt::{Display, Formatter},
     fs,
-    io::{self, stdin, stdout, Write},
+    io::{self, stdout, Write},
     path::Path,
     process::{Command, Stdio},
 };
@@ -93,11 +93,7 @@ pub fn copy_compiled_mod(repo: &Repository) -> Result<(), GitError> {
             print!("==> ");
             stdout().flush()?;
 
-            let input = {
-                let mut tmp = String::new();
-                stdin().read_line(&mut tmp)?;
-                tmp.trim().to_string()
-            };
+            let input = crate::read_input()?;
             let input = crate::parse_input(&input);
 
             if let Some(input) = input {
@@ -168,11 +164,7 @@ pub fn choose_branch(repo: &Repository) -> Result<String, GitError> {
     print!("==> ");
     stdout().flush()?;
 
-    let input = {
-        let mut tmp = String::new();
-        stdin().read_line(&mut tmp)?;
-        tmp.trim().to_string()
-    };
+    let input = crate::read_input()?;
 
     match input.parse::<usize>() {
         Ok(n) if n > 0 && n <= branches.len() => {

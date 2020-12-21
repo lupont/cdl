@@ -88,27 +88,17 @@ fn parse_query(src: &str) -> String {
     about = "A command-line utility for downloading Minecraft mods."
 )]
 pub struct Cdl {
-    #[structopt(short = "l", long, default_value = "forge", possible_values = &["forge", "fabric", "both"], help = "The mod loader to use when searching.")]
-    pub mod_loader: ModLoader,
+    #[structopt(short = "l", long, possible_values = &["forge", "fabric", "both"], help = "The mod loader to use when searching.")]
+    pub mod_loader: Option<ModLoader>,
 
-    #[structopt(
-        short = "v",
-        long,
-        default_value = "1.16.4",
-        help = "The version of the game."
-    )]
-    pub game_version: String,
+    #[structopt(short = "v", long, help = "The version of the game.")]
+    pub game_version: Option<String>,
 
-    #[structopt(short, long, default_value = "popularity", possible_values = &["downloads", "popularity", "name", "updated", "created"], help = "The ordering of search results.")]
-    pub sort: SortType,
+    #[structopt(short, long, possible_values = &["downloads", "popularity", "name", "updated", "created"], help = "The ordering of search results.")]
+    pub sort: Option<SortType>,
 
-    #[structopt(
-        short,
-        long,
-        default_value = "9",
-        help = "The amount of search results to show."
-    )]
-    pub amount: u8,
+    #[structopt(short, long, help = "The amount of search results to show.")]
+    pub amount: Option<u8>,
 
     #[structopt(short, long)]
     pub github_repo: bool,

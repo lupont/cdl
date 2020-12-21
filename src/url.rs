@@ -1,19 +1,35 @@
 use crate::config::Config;
+use crate::Cdl;
 
 const BASE_URL: &str = "https://addons-ecs.forgesvc.net/api/v2/addon";
 
-pub fn search_url(config: &Config, query: &str) -> String {
+pub fn search_url(cdl: &Cdl, config: &Config) -> String {
+    let game_version = match &cdl.game_version {
+        Some(version) => version,
+        None => &config.game_version,
+    };
+
+    let amount = match &cdl.amount {
+        Some(amount) => amount,
+        None => &config.amount,
+    };
+
+    let sort_type = match &cdl.sort {
+        Some(sort_type) => sort_type,
+        None => &config.sort_type,
+    };
+
     format!(
         "{base}/search?categoryId={category_id}&gameId={game_id}&gameVersion={game_version}&index={index}&pageSize={page_size}&searchFilter={search_filter}&sectionId={section_id}&sort={sort}", 
         base          = BASE_URL,
         category_id   = 0,
         game_id       = 432,
-        game_version  = config.game_version,
+        game_version  = game_version,
         index         = 0,
-        page_size     = config.amount,
-        search_filter = query,
+        page_size     = amount,
+        search_filter = cdl.query,
         section_id    = 6,
-        sort          = config.sort_type,
+        sort          = sort_type,
     )
 }
 

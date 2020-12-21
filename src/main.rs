@@ -3,7 +3,7 @@ use reqwest::{Client, IntoUrl};
 use std::{
     error::Error,
     fs::File,
-    io::{copy, stdin, stdout, Write},
+    io::{self, copy, stdin, stdout, Write},
 };
 use structopt::StructOpt;
 
@@ -47,7 +47,17 @@ fn handle_git(cdl: Cdl) -> Result<(), git::GitError> {
 
 async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
     let client = Client::new();
-    let url = url::search_url(&config, &cdl.query);
+    let url = url::search_url(&cdl, &config);
+
+    let loader = match &cdl.mod_loader {
+        Some(loader) => loader,
+        None => &config.mod_loader,
+    };
+
+    let version = match &cdl.game_version {
+        Some(version) => version,
+        None => &config.game_version,
+    };
 
     let mut search_results = client
         .get(&url)
@@ -59,7 +69,9 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
     {
         let mut i = 0;
         while i != search_results.len() {
-            if &cdl.mod_loader == &cdl::ModLoader::Forge && search_results[i].is_fabric() {
+            if loader == &cdl::ModLoader::Forge && search_results[i].is_fabric() {
+                search_results.remove(i);
+            } else if loader == &cdl::ModLoader::Fabric && !search_results[i].is_fabric() {
                 search_results.remove(i);
             } else {
                 i += 1;
@@ -70,9 +82,9 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
     if search_results.len() == 0 {
         println!(
             "No {} mods for {} including '{}' found.",
-            config.mod_loader.to_string(),
-            config.game_version,
-            cdl.query
+            loader.to_string(),
+            version,
+            cdl.query,
         );
         return Ok(());
     }
@@ -93,19 +105,15 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
 
     println!(
         "Searched {} mods for {} including '{}'.",
-        config.mod_loader.to_string(),
-        config.game_version,
+        loader.to_string(),
+        version,
         cdl.query,
     );
 
     print!("==> ");
     stdout().flush()?;
 
-    let input = {
-        let mut tmp = String::new();
-        stdin().read_line(&mut tmp)?;
-        tmp.trim().to_string()
-    };
+    let input = read_input()?;
 
     let input = match parse_input(&input) {
         Some(input) => input,
@@ -125,7 +133,7 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
     let mut already_downloaded: Vec<u32> = vec![];
 
     for moddy in mods {
-        let m = get_with_dependencies(&cdl, &client, moddy.id).await?;
+        let m = get_with_dependencies(&cdl, &config, &client, moddy.id).await?;
         let (first, rest) = m.split_first().ok_or("mod list was empty")?;
 
         print!("<== Downloading {}...", first.file_name);
@@ -184,6 +192,7 @@ async fn download<T: IntoUrl>(
 #[async_recursion]
 async fn get_with_dependencies(
     cdl: &Cdl,
+    config: &Config,
     client: &Client,
     mod_id: u32,
 ) -> Result<Vec<models::ModInfo>, reqwest::Error> {
@@ -195,8 +204,13 @@ async fn get_with_dependencies(
         .json::<models::SearchResult>()
         .await?;
 
+    let version = match &cdl.game_version {
+        Some(version) => version,
+        None => &config.game_version,
+    };
+
     let file_id = result
-        .get_file_by_version(&cdl.game_version)
+        .get_file_by_version(version)
         .map(|o| o.project_file_id);
 
     if let None = file_id {
@@ -213,7 +227,7 @@ async fn get_with_dependencies(
     let mut mods: Vec<models::ModInfo> = vec![];
 
     for dep in file.dependencies.iter().filter(|&d| d.dep_type == 3) {
-        let foo = get_with_dependencies(cdl, client, dep.addon_id).await?;
+        let foo = get_with_dependencies(cdl, config, client, dep.addon_id).await?;
         mods.extend(foo);
     }
 
@@ -233,4 +247,10 @@ fn parse_input(input: &str) -> Option<Vec<usize>> {
         0 => None,
         _ => Some(foo),
     }
+}
+
+fn read_input() -> io::Result<String> {
+    let mut s = String::new();
+    stdin().read_line(&mut s)?;
+    Ok(s.trim().to_string())
 }
