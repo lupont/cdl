@@ -4,20 +4,9 @@ use crate::Cdl;
 const BASE_URL: &str = "https://addons-ecs.forgesvc.net/api/v2/addon";
 
 pub fn search_url(cdl: &Cdl, config: &Config) -> String {
-    let game_version = match &cdl.game_version {
-        Some(version) => version,
-        None => &config.game_version,
-    };
-
-    let amount = match &cdl.amount {
-        Some(amount) => amount,
-        None => &config.amount,
-    };
-
-    let sort_type = match &cdl.sort {
-        Some(sort_type) => sort_type,
-        None => &config.sort_type,
-    };
+    let game_version = cdl.game_version.as_ref().unwrap_or(&config.game_version);
+    let amount = cdl.amount.unwrap_or(config.amount);
+    let sort_type = cdl.sort.as_ref().unwrap_or(&config.sort_type);
 
     format!(
         "{base}/search?categoryId={category_id}&gameId={game_id}&gameVersion={game_version}&index={index}&pageSize={page_size}&searchFilter={search_filter}&sectionId={section_id}&sort={sort}", 

@@ -49,15 +49,8 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
     let client = Client::new();
     let url = url::search_url(&cdl, &config);
 
-    let loader = match &cdl.mod_loader {
-        Some(loader) => loader,
-        None => &config.mod_loader,
-    };
-
-    let version = match &cdl.game_version {
-        Some(version) => version,
-        None => &config.game_version,
-    };
+    let version = cdl.game_version.as_ref().unwrap_or(&config.game_version);
+    let loader = cdl.mod_loader.as_ref().unwrap_or(&config.mod_loader);
 
     let mut search_results = client
         .get(&url)
@@ -204,10 +197,7 @@ async fn get_with_dependencies(
         .json::<models::SearchResult>()
         .await?;
 
-    let version = match &cdl.game_version {
-        Some(version) => version,
-        None => &config.game_version,
-    };
+    let version = cdl.game_version.as_ref().unwrap_or(&config.game_version);
 
     let file_id = result
         .get_file_by_version(version)

@@ -77,7 +77,7 @@ impl Config {
         }
 
         let file = fs::read_to_string(config_path)?;
-        let config: Config = toml::from_str(&file)?;
+        let config = toml::from_str(&file)?;
 
         Ok(config)
     }
