@@ -1,4 +1,4 @@
-use crate::cdl::{ModLoader, SortType};
+use cdl_lib::models::{ModLoader, SortType};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fmt;
@@ -66,7 +66,7 @@ impl Config {
     pub fn load() -> Result<Self, ConfigError> {
         let home_dir = &env::var("HOME")?;
         let config_dir = Path::join(Path::new(&home_dir), ".config/cdl");
-        let config_file = Path::new("cdl.toml");
+        let config_file = Path::new("default.toml");
         let config_path = Path::join(&config_dir, config_file);
 
         if !config_path.exists() {

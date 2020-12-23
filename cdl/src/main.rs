@@ -1,20 +1,56 @@
-use async_recursion::async_recursion;
-use reqwest::{Client, IntoUrl};
+use cdl_lib::{git, models};
 use std::{
     error::Error,
-    fs::File,
-    io::{self, copy, stdin, stdout, Write},
+    fs,
+    io::{self, stdin, stdout, Write},
 };
 use structopt::StructOpt;
 
 mod cdl;
 mod config;
-mod git;
-mod models;
-mod url;
 
 use cdl::Cdl;
 use config::Config;
+
+fn choose_branch(repo: &git::Repository) -> git::GitResult<String> {
+    let branches = repo
+        .branches(None)?
+        .filter_map(Result::ok)
+        .filter(|(b, _)| b.name().is_ok())
+        .map(|(b, _)| b)
+        .enumerate()
+        .collect::<Vec<(usize, git::Branch)>>();
+
+    println!("  INDEX  BRANCH");
+    for (i, branch) in &branches {
+        let name = branch.name().unwrap();
+        if let Some(name) = name {
+            println!(
+                "> {}     {}{}",
+                i + 1,
+                if i + 1 < 10 { " " } else { "" },
+                name
+            );
+        }
+    }
+
+    print!("==> ");
+    stdout().flush()?;
+
+    let input = crate::read_input()?;
+
+    match input.parse::<usize>() {
+        Ok(n) if n > 0 && n <= branches.len() => {
+            let branch = &branches[n - 1].1;
+            return Ok(branch.name().unwrap().unwrap().into());
+        }
+
+        _ => {
+            println!("here's nothing to do.");
+            return Err(git::GitError::InvalidBranchError);
+        }
+    }
+}
 
 fn print_mod(max_len: usize, (index, result): (usize, &models::SearchResult)) {
     println!(
@@ -32,7 +68,7 @@ fn handle_git(cdl: Cdl) -> Result<(), git::GitError> {
     let mut repo = git::clone(&cdl.query)?;
 
     println!("The following branches were found, please select one:");
-    let branch = git::choose_branch(&repo)?;
+    let branch = choose_branch(&repo)?;
 
     git::checkout(&mut repo, &branch)?;
 
@@ -40,37 +76,43 @@ fn handle_git(cdl: Cdl) -> Result<(), git::GitError> {
     git::execute_gradlew(&repo)?;
 
     println!("\nThe following jars were created, please select one or more:");
-    git::copy_compiled_mod(&repo)?;
+    let jars = git::get_compiled_jars(&repo)?;
+
+    println!("  INDEX  FILE");
+    for (i, jar) in jars.iter().enumerate() {
+        println!(
+            "> {}     {}{}",
+            i + 1,
+            if i + 1 < 10 { " " } else { "" },
+            jar.file_name().to_string_lossy()
+        );
+    }
+
+    print!("==> ");
+    stdout().flush()?;
+    let input = read_input()?;
+    if let Some(input) = parse_input(&input) {
+        for n in input {
+            if n > 0 && n <= jars.len() {
+                fs::copy(&mut jars[n - 1].path(), &mut jars[n - 1].file_name())?;
+            } else {
+                return Err(git::GitError::InvalidBranchError);
+            }
+        }
+    }
 
     Ok(())
 }
 
 async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
-    let client = Client::new();
-    let url = url::search_url(&cdl, &config);
-
     let version = cdl.game_version.as_ref().unwrap_or(&config.game_version);
     let loader = cdl.mod_loader.as_ref().unwrap_or(&config.mod_loader);
+    let amount = cdl.amount.unwrap_or(config.amount);
+    let sort_type = cdl.sort.as_ref().unwrap_or(&config.sort_type);
 
-    let mut search_results = client
-        .get(&url)
-        .send()
-        .await?
-        .json::<Vec<models::SearchResult>>()
-        .await?;
+    let url = cdl_lib::url::search_url(&cdl.query, version, amount, sort_type);
 
-    {
-        let mut i = 0;
-        while i != search_results.len() {
-            if loader == &cdl::ModLoader::Forge && search_results[i].is_fabric() {
-                search_results.remove(i);
-            } else if loader == &cdl::ModLoader::Fabric && !search_results[i].is_fabric() {
-                search_results.remove(i);
-            } else {
-                i += 1;
-            }
-        }
-    }
+    let search_results = cdl_lib::get_search_results(&url, loader).await?;
 
     if search_results.len() == 0 {
         println!(
@@ -120,40 +162,10 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
         .into_iter()
         .enumerate()
         .filter(|(i, _)| input.contains(&(i + 1)))
-        .map(|(_, r)| r)
+        .map(|(_, r)| r.id)
         .collect::<Vec<_>>();
 
-    let mut already_downloaded: Vec<u32> = vec![];
-
-    for moddy in mods {
-        let m = get_with_dependencies(&cdl, &config, &client, moddy.id).await?;
-        let (first, rest) = m.split_first().ok_or("mod list was empty")?;
-
-        print!("<== Downloading {}...", first.file_name);
-        match download(&client, &first.download_url, &first.file_name).await {
-            Ok(_) => {
-                println!(" done!");
-                already_downloaded.push(first.id);
-            }
-            Err(_) => println!(" An error occured."),
-        }
-
-        for r in rest {
-            if already_downloaded.contains(&r.id) {
-                println!("    {} already downloaded.", r.file_name);
-                continue;
-            }
-
-            print!("    Downloading {}...", r.file_name);
-            match download(&client, &r.download_url, &r.file_name).await {
-                Ok(_) => {
-                    println!(" done!");
-                    already_downloaded.push(r.id);
-                }
-                Err(_) => println!(" An error occured."),
-            }
-        }
-    }
+    cdl_lib::download_all(version, &mods).await?;
     Ok(())
 }
 
@@ -169,61 +181,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
-}
-
-async fn download<T: IntoUrl>(
-    client: &Client,
-    url: T,
-    file_name: &str,
-) -> Result<(), Box<dyn Error>> {
-    let mut dest = File::create(file_name)?;
-    let source = client.get(url).send().await?.bytes().await?;
-    copy(&mut source.as_ref(), &mut dest)?;
-    Ok(())
-}
-
-#[async_recursion]
-async fn get_with_dependencies(
-    cdl: &Cdl,
-    config: &Config,
-    client: &Client,
-    mod_id: u32,
-) -> Result<Vec<models::ModInfo>, reqwest::Error> {
-    let url = url::mod_url(mod_id);
-    let result = client
-        .get(&url)
-        .send()
-        .await?
-        .json::<models::SearchResult>()
-        .await?;
-
-    let version = cdl.game_version.as_ref().unwrap_or(&config.game_version);
-
-    let file_id = result
-        .get_file_by_version(version)
-        .map(|o| o.project_file_id);
-
-    if let None = file_id {
-        return Ok(vec![]);
-    }
-
-    let file = client
-        .get(&url::info_url(result.id, file_id.unwrap()))
-        .send()
-        .await?
-        .json::<models::ModInfo>()
-        .await?;
-
-    let mut mods: Vec<models::ModInfo> = vec![];
-
-    for dep in file.dependencies.iter().filter(|&d| d.dep_type == 3) {
-        let foo = get_with_dependencies(cdl, config, client, dep.addon_id).await?;
-        mods.extend(foo);
-    }
-
-    mods.insert(0, file);
-
-    Ok(mods)
 }
 
 fn parse_input(input: &str) -> Option<Vec<usize>> {

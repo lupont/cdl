@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 async-recursion = "0.2"
+cdl-lib = { path = "../cdl-lib" }
 git2 = "0.13"
 reqwest = { version = "0.10", features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
