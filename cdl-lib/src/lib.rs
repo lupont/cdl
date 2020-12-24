@@ -69,6 +69,10 @@ pub async fn download_all(game_version: &str, ids: &[u32]) -> reqwest::Result<()
     for id in ids {
         let m = get_with_dependencies(game_version, *id).await?;
         if let Some((first, rest)) = m.split_first() {
+            if already_downloaded.contains(&first.id) {
+                continue;
+            }
+
             if let Ok(()) = download(&first.download_url, &first.file_name).await {
                 already_downloaded.push(first.id);
             }
