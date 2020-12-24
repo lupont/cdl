@@ -4,8 +4,9 @@ pub mod url;
 
 use models::{ModInfo, ModLoader, SearchResult};
 use std::error::Error;
+use std::fmt;
 use std::fs::File;
-use std::io::copy;
+use std::io::{self, copy};
 
 pub async fn get_search_results<T: reqwest::IntoUrl>(
     url: T,
@@ -27,30 +28,59 @@ pub async fn get_search_results<T: reqwest::IntoUrl>(
     Ok(results)
 }
 
-pub async fn download<T: reqwest::IntoUrl>(url: T, file_name: &str) -> Result<(), Box<dyn Error>> {
+#[derive(Debug)]
+pub enum DownloadError {
+    IoError(io::Error),
+    ReqwestError(reqwest::Error),
+}
+
+impl fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::IoError(e) => write!(f, "{}", e),
+            Self::ReqwestError(e) => write!(f, "{}", e),
+        }
+    }
+}
+
+impl Error for DownloadError {}
+
+impl From<io::Error> for DownloadError {
+    fn from(e: io::Error) -> Self {
+        Self::IoError(e)
+    }
+}
+
+impl From<reqwest::Error> for DownloadError {
+    fn from(e: reqwest::Error) -> Self {
+        Self::ReqwestError(e)
+    }
+}
+
+pub async fn download<T: reqwest::IntoUrl>(url: T, file_name: &str) -> Result<(), DownloadError> {
     let mut dest = File::create(file_name)?;
     let source = reqwest::get(url).await?.bytes().await?;
     copy(&mut source.as_ref(), &mut dest)?;
     Ok(())
 }
 
-pub async fn download_all(game_version: &str, ids: &[u32]) -> Result<(), Box<dyn Error>> {
+pub async fn download_all(game_version: &str, ids: &[u32]) -> reqwest::Result<()> {
     let mut already_downloaded = Vec::<u32>::new();
     for id in ids {
         let m = get_with_dependencies(game_version, *id).await?;
-        let (first, rest) = m.split_first().ok_or("mod list was empty")?;
-
-        if let Ok(()) = download(&first.download_url, &first.file_name).await {
-            already_downloaded.push(first.id);
-        }
-
-        for r in rest {
-            if already_downloaded.contains(&r.id) {
-                continue;
+        if let Some((first, rest)) = m.split_first() {
+            if let Ok(()) = download(&first.download_url, &first.file_name).await {
+                already_downloaded.push(first.id);
             }
 
-            if let Ok(()) = download(&r.download_url, &r.file_name).await {
-                already_downloaded.push(r.id);
+            for r in rest {
+                if already_downloaded.contains(&r.id) {
+                    continue;
+                }
+
+                if let Ok(()) = download(&r.download_url, &r.file_name).await {
+                    already_downloaded.push(r.id);
+                }
             }
         }
     }

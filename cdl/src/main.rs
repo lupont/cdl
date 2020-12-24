@@ -2,7 +2,7 @@ use cdl_lib::{git, models};
 use std::{
     error::Error,
     fs,
-    io::{self, stdin, stdout, Write},
+    io::{self, Write},
 };
 use structopt::StructOpt;
 
@@ -12,7 +12,7 @@ mod config;
 use cdl::Cdl;
 use config::Config;
 
-fn choose_branch(repo: &git::Repository) -> git::GitResult<String> {
+fn choose_branch(repo: &git::Repository) -> git::Result<String> {
     let branches = repo
         .branches(None)?
         .filter_map(Result::ok)
@@ -35,7 +35,7 @@ fn choose_branch(repo: &git::Repository) -> git::GitResult<String> {
     }
 
     print!("==> ");
-    stdout().flush()?;
+    io::stdout().flush()?;
 
     let input = crate::read_input()?;
 
@@ -64,7 +64,7 @@ fn print_mod(max_len: usize, (index, result): (usize, &models::SearchResult)) {
     );
 }
 
-fn handle_git(cdl: Cdl) -> Result<(), git::GitError> {
+fn handle_git(cdl: Cdl) -> git::Result<()> {
     let mut repo = git::clone(&cdl.query)?;
 
     println!("The following branches were found, please select one:");
@@ -89,7 +89,7 @@ fn handle_git(cdl: Cdl) -> Result<(), git::GitError> {
     }
 
     print!("==> ");
-    stdout().flush()?;
+    io::stdout().flush()?;
     let input = read_input()?;
     if let Some(input) = parse_input(&input) {
         for n in input {
@@ -104,7 +104,7 @@ fn handle_git(cdl: Cdl) -> Result<(), git::GitError> {
     Ok(())
 }
 
-async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
+async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::DownloadError> {
     let version = cdl.game_version.as_ref().unwrap_or(&config.game_version);
     let loader = cdl.mod_loader.as_ref().unwrap_or(&config.mod_loader);
     let amount = cdl.amount.unwrap_or(config.amount);
@@ -146,7 +146,7 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), Box<dyn Error>> {
     );
 
     print!("==> ");
-    stdout().flush()?;
+    io::stdout().flush()?;
 
     let input = read_input()?;
 
@@ -198,6 +198,6 @@ fn parse_input(input: &str) -> Option<Vec<usize>> {
 
 fn read_input() -> io::Result<String> {
     let mut s = String::new();
-    stdin().read_line(&mut s)?;
+    io::stdin().read_line(&mut s)?;
     Ok(s.trim().to_string())
 }

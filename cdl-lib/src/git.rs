@@ -1,13 +1,13 @@
 pub use git2::{Branch, Repository};
 use std::{
     error::Error,
-    fmt::{Display, Formatter},
+    fmt::{self, Display, Formatter},
     fs, io,
     path::Path,
     process::{Command, Stdio},
 };
 
-pub type GitResult<T> = Result<T, GitError>;
+pub type Result<T> = std::result::Result<T, GitError>;
 
 #[derive(Debug)]
 pub enum GitError {
@@ -17,7 +17,7 @@ pub enum GitError {
 }
 
 impl Display for GitError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "")
     }
 }
@@ -36,7 +36,7 @@ impl From<git2::Error> for GitError {
     }
 }
 
-pub fn checkout(repo: &mut Repository, branch_name: &str) -> GitResult<()> {
+pub fn checkout(repo: &mut Repository, branch_name: &str) -> Result<()> {
     let head = repo.head()?;
     let oid = match head.target() {
         Some(target) => target,
@@ -55,7 +55,7 @@ pub fn checkout(repo: &mut Repository, branch_name: &str) -> GitResult<()> {
     Ok(())
 }
 
-pub fn execute_gradlew(repo: &Repository) -> GitResult<()> {
+pub fn execute_gradlew(repo: &Repository) -> Result<()> {
     match repo.workdir() {
         Some(dir) => {
             let _ = Command::new("sh")
@@ -70,12 +70,12 @@ pub fn execute_gradlew(repo: &Repository) -> GitResult<()> {
     }
 }
 
-pub fn get_compiled_jars(repo: &Repository) -> GitResult<Vec<fs::DirEntry>> {
+pub fn get_compiled_jars(repo: &Repository) -> Result<Vec<fs::DirEntry>> {
     if let Some(dir) = repo.workdir() {
         let build_dir = Path::join(dir, "build/libs");
         if build_dir.is_dir() {
             let files = fs::read_dir(build_dir)?
-                .filter_map(Result::ok)
+                .filter_map(std::result::Result::ok)
                 .collect::<Vec<_>>();
             return Ok(files);
         }
@@ -85,7 +85,7 @@ pub fn get_compiled_jars(repo: &Repository) -> GitResult<Vec<fs::DirEntry>> {
 }
 
 #[allow(dead_code)]
-fn pull(repo: &Repository, branch_name: &str) -> GitResult<()> {
+fn pull(repo: &Repository, branch_name: &str) -> Result<()> {
     let mut origin_remote = repo.find_remote("origin")?;
     origin_remote.fetch(&[branch_name], None, None)?;
     let oid = repo.refname_to_id(&format!("refs/remotes/origin/{}", branch_name))?;
@@ -94,7 +94,7 @@ fn pull(repo: &Repository, branch_name: &str) -> GitResult<()> {
     Ok(())
 }
 
-pub fn clone(url: &str) -> GitResult<Repository> {
+pub fn clone(url: &str) -> Result<Repository> {
     let full_url = format!("https://github.com/{}", url);
     let local_dir = Path::join(Path::new("/tmp/cdl/"), url);
 
