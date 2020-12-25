@@ -150,8 +150,8 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
     let input = read_input()?;
 
     let input = match parse_input(&input) {
-        Some(input) => input,
-        None => {
+        Some(input) if input.iter().all(|i| *i <= search_results.len()) => input,
+        _ => {
             println!("There's nothing to do.");
             return Ok(());
         }
@@ -169,10 +169,12 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
         match event {
             MainDownloading(info) => print!("<== Downloading {}... ", info.file_name),
             MainDownloaded(_) => println!("done!"),
-            MainAlreadyDownloaded(info) => println!("<== {} already downloaded.", info.file_name),
+            MainAlreadyDownloaded(info) => {
+                println!("<== {} is already downloaded.", info.file_name)
+            }
             DepDownloading(info) => print!("    Downloading {}... ", info.file_name),
             DepDownloaded(_) => println!("done!"),
-            DepAlreadyDownloaded(info) => println!("    {} already downloaded.", info.file_name),
+            DepAlreadyDownloaded(info) => println!("    {} is already downloaded.", info.file_name),
         }
     })
     .await?;

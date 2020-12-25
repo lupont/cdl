@@ -7,6 +7,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io;
+use std::path::Path;
 
 pub async fn get_search_results(
     query: &str,
@@ -90,7 +91,7 @@ pub async fn download_all<F: Fn(EventType)>(
     for result in results {
         let m = get_with_dependencies(game_version, result.id).await?;
         if let Some((first, rest)) = m.split_first() {
-            if already_downloaded.contains(&first.id) {
+            if Path::new(&first.file_name).exists() || already_downloaded.contains(&first.id) {
                 on_event(MainAlreadyDownloaded(&first));
                 continue;
             }
@@ -102,7 +103,7 @@ pub async fn download_all<F: Fn(EventType)>(
             }
 
             for r in rest {
-                if already_downloaded.contains(&r.id) {
+                if Path::new(&r.file_name).exists() || already_downloaded.contains(&r.id) {
                     on_event(DepAlreadyDownloaded(&r));
                     continue;
                 }
