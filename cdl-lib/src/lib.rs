@@ -6,7 +6,7 @@ use models::{ModInfo, ModLoader, SearchResult};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
-use std::io::{self, copy};
+use std::io;
 
 pub async fn get_search_results<T: reqwest::IntoUrl>(
     url: T,
@@ -60,7 +60,7 @@ impl From<reqwest::Error> for DownloadError {
 pub async fn download<T: reqwest::IntoUrl>(url: T, file_name: &str) -> Result<(), DownloadError> {
     let mut dest = File::create(file_name)?;
     let source = reqwest::get(url).await?.bytes().await?;
-    copy(&mut source.as_ref(), &mut dest)?;
+    io::copy(&mut source.as_ref(), &mut dest)?;
     Ok(())
 }
 
@@ -139,12 +139,4 @@ async fn get_with_dependencies(game_version: &str, mod_id: u32) -> reqwest::Resu
     mods.insert(0, file);
 
     Ok(mods)
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }

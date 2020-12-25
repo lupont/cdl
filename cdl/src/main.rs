@@ -168,10 +168,10 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
     cdl_lib::download_all(version, &mods[..], |event| {
         use cdl_lib::EventType::*;
         match event {
-            MainDownloading(info) => print!("<== Downloading {}...", info.file_name),
+            MainDownloading(info) => print!("<== Downloading {}... ", info.file_name),
             MainDownloaded(_) => println!("done!"),
             MainAlreadyDownloaded(info) => println!("<== {} already downloaded.", info.file_name),
-            DepDownloading(info) => print!("    Downloading {}...", info.file_name),
+            DepDownloading(info) => print!("    Downloading {}... ", info.file_name),
             DepDownloaded(_) => println!("done!"),
             DepAlreadyDownloaded(info) => println!("    {} already downloaded.", info.file_name),
         }
@@ -198,8 +198,24 @@ fn parse_input(input: &str) -> Option<Vec<usize>> {
     let foo = input
         .trim()
         .split(' ')
-        .filter_map(|s| s.parse().ok())
-        .collect::<Vec<_>>();
+        .filter_map(|s| {
+            if s.contains("-") {
+                let mut parts = s.split("-");
+                let start = parts.next()?.parse::<usize>().ok()?;
+                let end = parts.next()?.parse::<usize>().ok()?;
+
+                Some((start..=end).collect::<Vec<_>>())
+            } else {
+                Some(vec![s.parse::<usize>().ok()?])
+            }
+        })
+        .flatten()
+        .fold(Vec::new(), |mut a, c| {
+            if !a.contains(&c) {
+                a.push(c);
+            }
+            a
+        });
 
     match foo.len() {
         0 => None,
@@ -211,4 +227,20 @@ fn read_input() -> io::Result<String> {
     let mut s = String::new();
     io::stdin().read_line(&mut s)?;
     Ok(s.trim().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_parse() {
+        assert_eq!(parse_input("1"), Some(vec![1]));
+        assert_eq!(parse_input("1 2 3"), Some(vec![1, 2, 3]));
+        assert_eq!(parse_input("1 1 2 1 3 4 10"), Some(vec![1, 2, 3, 4, 10]));
+        assert_eq!(parse_input("1-9"), Some((1..=9).collect()));
+        assert_eq!(parse_input("1-3 5 7"), Some(vec![1, 2, 3, 5, 7]));
+        assert_eq!(parse_input("1 3 5-6 7"), Some(vec![1, 3, 5, 6, 7]));
+        assert_eq!(parse_input("1-3 1 2 3"), Some((1..=3).collect()));
+    }
 }

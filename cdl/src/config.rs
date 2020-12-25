@@ -54,6 +54,8 @@ impl From<env::VarError> for ConfigError {
     }
 }
 
+pub type Result<T> = std::result::Result<T, ConfigError>;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub game_version: String,
@@ -63,7 +65,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Self, ConfigError> {
+    pub fn load() -> Result<Self> {
         let home_dir = &env::var("HOME")?;
         let config_dir = Path::join(Path::new(&home_dir), ".config/cdl");
         let config_file = Path::new("default.toml");
