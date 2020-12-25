@@ -2,17 +2,24 @@ pub mod git;
 pub mod models;
 pub mod url;
 
-use models::{ModInfo, ModLoader, SearchResult};
+use models::{ModInfo, ModLoader, SearchResult, SortType};
 use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io;
 
-pub async fn get_search_results<T: reqwest::IntoUrl>(
-    url: T,
+pub async fn get_search_results(
+    query: &str,
+    version: &str,
+    amount: u8,
+    sort_type: &SortType,
     mod_loader: &ModLoader,
 ) -> reqwest::Result<Vec<SearchResult>> {
-    let mut results = reqwest::get(url).await?.json::<Vec<SearchResult>>().await?;
+    let url = url::search_url(query, version, amount, sort_type);
+    let mut results = reqwest::get(&url)
+        .await?
+        .json::<Vec<SearchResult>>()
+        .await?;
 
     let mut i = 0;
     while i != results.len() {

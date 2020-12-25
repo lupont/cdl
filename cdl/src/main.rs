@@ -110,9 +110,8 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
     let amount = cdl.amount.unwrap_or(config.amount);
     let sort_type = cdl.sort.as_ref().unwrap_or(&config.sort_type);
 
-    let url = cdl_lib::url::search_url(&cdl.query, version, amount, sort_type);
-
-    let search_results = cdl_lib::get_search_results(&url, loader).await?;
+    let search_results =
+        cdl_lib::get_search_results(&cdl.query, version, amount, sort_type, loader).await?;
 
     if search_results.len() == 0 {
         println!(
@@ -124,9 +123,9 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
         return Ok(());
     }
 
-    let max_len = search_results
-        .iter()
-        .fold(0, |a, c| if c.name.len() > a { c.name.len() } else { a });
+    // UNWRAP: can unwrap here because length is checked to be greater than zero,
+    //         and max_by_key is only None if the iterator is empty.
+    let max_len = search_results.iter().map(|s| s.name.len()).max().unwrap();
 
     println!(
         "  INDEX  NAME{} AUTHOR",
