@@ -159,13 +159,24 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
     };
 
     let mods = search_results
-        .into_iter()
+        .iter()
         .enumerate()
         .filter(|(i, _)| input.contains(&(i + 1)))
-        .map(|(_, r)| r.id)
+        .map(|(_, r)| r)
         .collect::<Vec<_>>();
 
-    cdl_lib::download_all(version, &mods).await?;
+    cdl_lib::download_all(version, &mods[..], |event| {
+        use cdl_lib::EventType::*;
+        match event {
+            MainDownloading(info) => print!("<== Downloading {}...", info.file_name),
+            MainDownloaded(_) => println!("done!"),
+            MainAlreadyDownloaded(info) => println!("<== {} already downloaded.", info.file_name),
+            DepDownloading(info) => print!("    Downloading {}...", info.file_name),
+            DepDownloaded(_) => println!("done!"),
+            DepAlreadyDownloaded(info) => println!("    {} already downloaded.", info.file_name),
+        }
+    })
+    .await?;
     Ok(())
 }
 

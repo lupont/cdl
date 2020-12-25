@@ -64,26 +64,46 @@ pub async fn download<T: reqwest::IntoUrl>(url: T, file_name: &str) -> Result<()
     Ok(())
 }
 
-pub async fn download_all(game_version: &str, ids: &[u32]) -> reqwest::Result<()> {
+pub enum EventType<'a> {
+    MainAlreadyDownloaded(&'a ModInfo),
+    MainDownloading(&'a ModInfo),
+    MainDownloaded(&'a ModInfo),
+    DepAlreadyDownloaded(&'a ModInfo),
+    DepDownloading(&'a ModInfo),
+    DepDownloaded(&'a ModInfo),
+}
+
+pub async fn download_all<F: Fn(EventType)>(
+    game_version: &str,
+    results: &[&SearchResult],
+    on_event: F,
+) -> reqwest::Result<()> {
+    use EventType::*;
     let mut already_downloaded = Vec::<u32>::new();
-    for id in ids {
-        let m = get_with_dependencies(game_version, *id).await?;
+    for result in results {
+        let m = get_with_dependencies(game_version, result.id).await?;
         if let Some((first, rest)) = m.split_first() {
             if already_downloaded.contains(&first.id) {
+                on_event(MainAlreadyDownloaded(&first));
                 continue;
             }
 
+            on_event(MainDownloading(&first));
             if let Ok(()) = download(&first.download_url, &first.file_name).await {
                 already_downloaded.push(first.id);
+                on_event(MainDownloaded(&first));
             }
 
             for r in rest {
                 if already_downloaded.contains(&r.id) {
+                    on_event(DepAlreadyDownloaded(&r));
                     continue;
                 }
 
+                on_event(DepDownloading(&r));
                 if let Ok(()) = download(&r.download_url, &r.file_name).await {
                     already_downloaded.push(r.id);
+                    on_event(DepDownloaded(&r));
                 }
             }
         }
