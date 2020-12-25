@@ -24,8 +24,12 @@ pub struct Cdl {
     #[structopt(short, long, help = "The amount of search results to show.")]
     pub amount: Option<u8>,
 
-    #[structopt(short, long)]
-    pub github_repo: bool,
+    #[structopt(
+        short,
+        long,
+        help = "Whether the query is the name of a Github repository and thus should be built from source."
+    )]
+    pub github: bool,
 
     #[structopt(parse(from_str = parse_query), help = "The query to search for.")]
     pub query: String,

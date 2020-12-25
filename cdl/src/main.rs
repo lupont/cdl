@@ -186,7 +186,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let cdl = Cdl::from_args();
     let config = config::Config::load()?;
 
-    if cdl.github_repo {
+    if cdl.github {
         handle_git(cdl)?;
     } else {
         handle_search(cdl, config).await?;
