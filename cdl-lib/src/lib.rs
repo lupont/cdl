@@ -139,7 +139,7 @@ async fn get_with_dependencies(game_version: &str, mod_id: u32) -> reqwest::Resu
 
     let mut mods: Vec<ModInfo> = vec![];
 
-    for dep in file.dependencies.iter().filter(|&d| d.dep_type == 3) {
+    for dep in file.hard_dependencies() {
         let foo = get_with_dependencies(game_version, dep.addon_id).await?;
         mods.extend(foo);
     }

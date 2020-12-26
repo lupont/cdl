@@ -157,10 +157,25 @@ pub struct ModInfo {
     pub dependencies: Vec<Dependency>,
 }
 
+impl ModInfo {
+    pub fn hard_dependencies(&self) -> Vec<&Dependency> {
+        self.dependencies
+            .iter()
+            .filter(|d| d.dep_type == Dependency::hard_id())
+            .collect()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Dependency {
     pub addon_id: u32,
     #[serde(rename = "type")]
     pub dep_type: u32,
+}
+
+impl Dependency {
+    pub fn hard_id() -> u32 {
+        3
+    }
 }

@@ -58,6 +58,11 @@ pub fn checkout(repo: &mut Repository, branch_name: &str) -> Result<()> {
 pub fn execute_gradlew(repo: &Repository) -> Result<()> {
     match repo.workdir() {
         Some(dir) => {
+            let _ = Command::new("chmod")
+                .current_dir(dir)
+                .arg("+x")
+                .arg("gradlew")
+                .output()?;
             let _ = Command::new("sh")
                 .current_dir(dir)
                 .arg("-c")
@@ -99,10 +104,14 @@ pub fn clone(url: &str) -> Result<Repository> {
     let local_dir = Path::join(Path::new("/tmp/cdl/"), url);
 
     if let Ok(repo) = Repository::open(&local_dir) {
+        println!("opening repo");
         // let branch_name = repo.find_branch
         // pull(repo, branch_name)?;
         return Ok(repo);
     }
 
-    Repository::clone(&full_url, &local_dir).map_err(GitError::from)
+    Repository::clone(&full_url, &local_dir).map_err(|e| {
+        println!("caught error");
+        GitError::from(e)
+    })
 }
