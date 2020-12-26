@@ -13,6 +13,8 @@ A command-line application for downloading Minecraft mods with dependencies.
 
 `cdl jei -a 40` specifies to include up to 40 results on search.
 
-`cdl -a 1 -v 1.7.10 -l forge ars` asks for 1 results including "ars" for Forge and Minecraft 1.7.10.
+`cdl -s created jei` specifies to sort the results by the date the mod was created.
+
+`cdl -a 1 -v 1.7.10 -l forge -s updated ars` asks for the most recently updated mod including "ars" for Forge and Minecraft 1.7.10.
 
 `cdl -g Foo/Bar` clones the repository at `https://github.com/Foo/Bar.git` and asks you to choose a branch before attempting to execute `./gradlew` in order to compile the mod from source. Once finshed, it asks which file(s) you want to copy.
