@@ -1,13 +1,10 @@
-use cdl_lib::{git, models};
-use std::{
-    error::Error,
-    fs,
-    io::{self, Write},
-};
+use cdl_lib::git;
+use std::{error::Error, fs};
 use structopt::StructOpt;
 
 mod cdl;
 mod config;
+mod ui;
 
 use cdl::Cdl;
 use config::Config;
@@ -18,50 +15,24 @@ fn choose_branch(repo: &git::Repository) -> git::Result<String> {
         .filter_map(Result::ok)
         .filter(|(b, _)| b.name().is_ok())
         .map(|(b, _)| b)
-        .enumerate()
-        .collect::<Vec<(usize, git::Branch)>>();
+        .collect::<Vec<_>>();
 
-    println!("  INDEX  BRANCH");
-    for (i, branch) in &branches {
-        let name = branch.name().unwrap();
-        if let Some(name) = name {
-            println!(
-                "> {}     {}{}",
-                i + 1,
-                if i + 1 < 10 { " " } else { "" },
-                name
-            );
-        }
-    }
+    ui::print_indexed_list(&["BRANCH"], &branches[..], |b| {
+        b.name().unwrap().unwrap().to_string()
+    });
 
-    print!("==> ");
-    io::stdout().flush()?;
-
-    let input = crate::read_input()?;
+    let input = ui::read_input()?;
 
     match input.parse::<usize>() {
         Ok(n) if n > 0 && n <= branches.len() => {
-            let branch = &branches[n - 1].1;
-            return Ok(branch.name().unwrap().unwrap().into());
+            return Ok(branches[n - 1].name().unwrap().unwrap().into());
         }
 
         _ => {
-            println!("here's nothing to do.");
+            println!("There's nothing to do.");
             return Err(git::GitError::InvalidBranchError);
         }
     }
-}
-
-fn print_mod(max_len: usize, (index, result): (usize, &models::SearchResult)) {
-    println!(
-        "> {index}{space1}{name} {space2}{authors} {fabric}",
-        index = index + 1,
-        space1 = " ".repeat(6 - (index + 1).to_string().len() + 1),
-        name = result.name,
-        space2 = " ".repeat(max_len - result.name.len() + 1),
-        authors = result.author_names(),
-        fabric = if result.is_fabric() { "[FABRIC]" } else { "" }
-    );
 }
 
 fn handle_git(cdl: Cdl) -> git::Result<()> {
@@ -78,20 +49,12 @@ fn handle_git(cdl: Cdl) -> git::Result<()> {
     println!("\nThe following jars were created, please select one or more:");
     let jars = git::get_compiled_jars(&repo)?;
 
-    println!("  INDEX  FILE");
-    for (i, jar) in jars.iter().enumerate() {
-        println!(
-            "> {}     {}{}",
-            i + 1,
-            if i + 1 < 10 { " " } else { "" },
-            jar.file_name().to_string_lossy()
-        );
-    }
+    ui::print_indexed_list(&["FILE"], &jars, |j| {
+        format!("{}", j.file_name().to_string_lossy())
+    });
 
-    print!("==> ");
-    io::stdout().flush()?;
-    let input = read_input()?;
-    if let Some(input) = parse_input(&input) {
+    let input = ui::read_input()?;
+    if let Some(input) = ui::parse_input(&input) {
         for n in input {
             if n > 0 && n <= jars.len() {
                 fs::copy(&mut jars[n - 1].path(), &mut jars[n - 1].file_name())?;
@@ -123,19 +86,12 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
         return Ok(());
     }
 
-    // UNWRAP: can unwrap here because length is checked to be greater than zero,
-    //         and max_by_key is only None if the iterator is empty.
-    let max_len = search_results.iter().map(|s| s.name.len()).max().unwrap();
-
-    println!(
-        "  INDEX  NAME{} AUTHOR",
-        " ".repeat(if max_len < 3 { 1 } else { max_len - 3 }),
+    ui::print_indexed_list2(
+        &["NAME", "AUTHOR"],
+        &search_results,
+        |r| r.name.clone(),
+        |r| r.author_names(),
     );
-
-    search_results
-        .iter()
-        .enumerate()
-        .for_each(|m| print_mod(max_len, m));
 
     println!(
         "Searched {} mods for {} including '{}'.",
@@ -144,12 +100,9 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
         cdl.query,
     );
 
-    print!("==> ");
-    io::stdout().flush()?;
+    let input = ui::read_input()?;
 
-    let input = read_input()?;
-
-    let input = match parse_input(&input) {
+    let input = match ui::parse_input(&input) {
         Some(input) if input.iter().all(|i| *i <= search_results.len()) => input,
         _ => {
             println!("There's nothing to do.");
@@ -193,55 +146,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
-}
-
-fn parse_input(input: &str) -> Option<Vec<usize>> {
-    let foo = input
-        .trim()
-        .split(' ')
-        .filter_map(|s| {
-            if s.contains("-") {
-                let mut parts = s.split("-");
-                let start = parts.next()?.parse::<usize>().ok()?;
-                let end = parts.next()?.parse::<usize>().ok()?;
-
-                Some((start..=end).collect::<Vec<_>>())
-            } else {
-                Some(vec![s.parse::<usize>().ok()?])
-            }
-        })
-        .flatten()
-        .fold(Vec::new(), |mut a, c| {
-            if !a.contains(&c) {
-                a.push(c);
-            }
-            a
-        });
-
-    match foo.len() {
-        0 => None,
-        _ => Some(foo),
-    }
-}
-
-fn read_input() -> io::Result<String> {
-    let mut s = String::new();
-    io::stdin().read_line(&mut s)?;
-    Ok(s.trim().to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn simple_parse() {
-        assert_eq!(parse_input("1"), Some(vec![1]));
-        assert_eq!(parse_input("1 2 3"), Some(vec![1, 2, 3]));
-        assert_eq!(parse_input("1 1 2 1 3 4 10"), Some(vec![1, 2, 3, 4, 10]));
-        assert_eq!(parse_input("1-9"), Some((1..=9).collect()));
-        assert_eq!(parse_input("1-3 5 7"), Some(vec![1, 2, 3, 5, 7]));
-        assert_eq!(parse_input("1 3 5-6 7"), Some(vec![1, 3, 5, 6, 7]));
-        assert_eq!(parse_input("1-3 1 2 3"), Some((1..=3).collect()));
-    }
 }

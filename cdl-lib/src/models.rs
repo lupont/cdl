@@ -100,6 +100,7 @@ impl SearchResult {
         // TODO: implement join() for Vec<Author>
         self.authors
             .iter()
+            .take(3)
             .fold(String::new(), |mut a, c| {
                 a.push_str(&c.name);
                 a.push_str(", ");
