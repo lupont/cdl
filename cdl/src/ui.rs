@@ -75,40 +75,6 @@ where
     }
 }
 
-// pub fn print_indexed_list<T: Display>(headers: &[&str], rows: &[&[&T]]) {
-//     let max_len = rows
-//         .iter()
-//         .map(|row| row[0].as_ref().len())
-//         .max()
-//         .unwrap_or(0); //collect::<Vec<_>>();
-
-//     print!("  INDEX  ");
-//     for (i, header) in headers.iter().enumerate() {
-//         print!("{}  ", header.as_ref());
-
-//         if i == 0 {
-//             print!("{}", " ".repeat(max_len - header.as_ref().len()));
-//         }
-//     }
-//     println!();
-
-//     for (i, row) in rows.iter().enumerate() {
-//         let index = i + 1;
-//         print!(
-//             "> {}{space}     ",
-//             index,
-//             space = if index < 10 { " " } else { "" }
-//         );
-//         for (i, col) in row.iter().enumerate() {
-//             print!("{}  ", col.as_ref());
-//             if i == 0 {
-//                 print!("{}", " ".repeat(max_len - col.as_ref().len()));
-//             }
-//         }
-//         println!();
-//     }
-// }
-
 pub fn parse_input(input: &str) -> Option<Vec<usize>> {
     let foo = input
         .trim()
