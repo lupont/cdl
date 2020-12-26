@@ -98,17 +98,20 @@ impl SearchResult {
 
     pub fn author_names(&self) -> String {
         // TODO: implement join() for Vec<Author>
-        self.authors
-            .iter()
-            .take(3)
-            .fold(String::new(), |mut a, c| {
-                a.push_str(&c.name);
-                a.push_str(", ");
-                a
-            })
-            .strip_suffix(", ")
-            .expect("expected author string to end with a semicolon")
-            .into()
+        format!(
+            "{} {}",
+            self.authors
+                .iter()
+                .take(3)
+                .fold(String::new(), |mut a, c| {
+                    a.push_str(&c.name);
+                    a.push_str(", ");
+                    a
+                })
+                .strip_suffix(", ")
+                .expect("expected author string to end with a semicolon"),
+            if self.authors.len() > 3 { "et al." } else { "" }
+        )
     }
 
     pub fn is_fabric(&self) -> bool {
