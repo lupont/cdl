@@ -6,11 +6,14 @@ where
     D: Display,
     F: Fn(&T) -> D,
 {
-    print!("  INDEX  ");
-    for header in headers {
-        print!("{}  ", header);
-    }
-    println!();
+    let header_string = {
+        let mut tmp = "  INDEX  ".to_string();
+        for header in headers {
+            tmp.push_str(&format!("{}  ", header));
+        }
+        tmp.trim_end().to_string()
+    };
+    println!("{}", header_string);
 
     for (i, item) in data.iter().enumerate() {
         let index = i + 1;
@@ -38,19 +41,25 @@ where
         }
     }
 
-    print!("  INDEX  ");
-    for header in headers {
-        print!("{}  ", &header);
-        print!(
-            "{}",
-            " ".repeat(if header.len() <= max_len {
-                max_len - header.len()
-            } else {
-                0
-            })
-        );
-    }
-    print!("\n");
+    let header_string = {
+        let mut tmp = "  INDEX  ".to_string();
+
+        for header in headers {
+            tmp.push_str(&format!("{}  ", &header));
+            tmp.push_str(&format!(
+                "{}",
+                " ".repeat(if header.len() <= max_len {
+                    max_len - header.len()
+                } else {
+                    0
+                })
+            ));
+        }
+
+        tmp.trim_end().to_string()
+    };
+
+    println!("{}", header_string);
 
     for i in 0..data.len() {
         let index = i + 1;
