@@ -15,11 +15,11 @@ pub async fn get_search_results(
     amount: u8,
     sort_type: &SortType,
     mod_loader: &ModLoader,
-) -> reqwest::Result<Vec<SearchResult>> {
+) -> surf::Result<Vec<SearchResult>> {
     let url = url::search_url(query, version, amount, sort_type);
-    let mut results = reqwest::get(&url)
+    let mut results = surf::get(&url)
         .await?
-        .json::<Vec<SearchResult>>()
+        .body_json::<Vec<SearchResult>>()
         .await?;
 
     let mut i = 0;
@@ -39,14 +39,14 @@ pub async fn get_search_results(
 #[derive(Debug)]
 pub enum DownloadError {
     IoError(io::Error),
-    ReqwestError(reqwest::Error),
+    SurfError(surf::Error),
 }
 
 impl fmt::Display for DownloadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::IoError(e) => write!(f, "{}", e),
-            Self::ReqwestError(e) => write!(f, "{}", e),
+            Self::SurfError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -59,16 +59,16 @@ impl From<io::Error> for DownloadError {
     }
 }
 
-impl From<reqwest::Error> for DownloadError {
-    fn from(e: reqwest::Error) -> Self {
-        Self::ReqwestError(e)
+impl From<surf::Error> for DownloadError {
+    fn from(e: surf::Error) -> Self {
+        Self::SurfError(e)
     }
 }
 
-pub async fn download<T: reqwest::IntoUrl>(url: T, file_name: &str) -> Result<(), DownloadError> {
+pub async fn download(url: &str, file_name: &str) -> Result<(), DownloadError> {
     let mut dest = File::create(file_name)?;
-    let source = reqwest::get(url).await?.bytes().await?;
-    io::copy(&mut source.as_ref(), &mut dest)?;
+    let mut source = &surf::get(url).await?.body_bytes().await?[..];
+    io::copy(&mut source, &mut dest)?;
     Ok(())
 }
 
@@ -85,7 +85,7 @@ pub async fn download_all<F: Fn(EventType)>(
     game_version: &str,
     results: &[&SearchResult],
     on_event: F,
-) -> reqwest::Result<()> {
+) -> surf::Result<()> {
     use EventType::*;
     let mut already_downloaded = Vec::<u32>::new();
     for result in results {
@@ -120,9 +120,9 @@ pub async fn download_all<F: Fn(EventType)>(
 }
 
 #[async_recursion::async_recursion]
-async fn get_with_dependencies(game_version: &str, mod_id: u32) -> reqwest::Result<Vec<ModInfo>> {
+async fn get_with_dependencies(game_version: &str, mod_id: u32) -> surf::Result<Vec<ModInfo>> {
     let url = url::mod_url(mod_id);
-    let result = reqwest::get(&url).await?.json::<SearchResult>().await?;
+    let result = surf::get(&url).await?.body_json::<SearchResult>().await?;
 
     let file_id = result
         .get_file_by_version(game_version)
@@ -132,9 +132,9 @@ async fn get_with_dependencies(game_version: &str, mod_id: u32) -> reqwest::Resu
         return Ok(vec![]);
     }
 
-    let file = reqwest::get(&url::info_url(result.id, file_id.unwrap()))
+    let file = surf::get(&url::info_url(result.id, file_id.unwrap()))
         .await?
-        .json::<ModInfo>()
+        .body_json::<ModInfo>()
         .await?;
 
     let mut mods: Vec<ModInfo> = vec![];

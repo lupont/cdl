@@ -8,7 +8,6 @@ fn parse_query(src: &str) -> String {
 #[derive(StructOpt, Debug)]
 #[structopt(
     name = "cdl",
-    version = "0.2.0",
     about = "A command-line utility for downloading Minecraft mods."
 )]
 pub struct Cdl {

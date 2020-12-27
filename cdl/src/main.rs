@@ -134,7 +134,7 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
     Ok(())
 }
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let cdl = Cdl::from_args();
     let config = config::Config::load()?;
