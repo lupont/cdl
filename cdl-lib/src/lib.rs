@@ -85,11 +85,11 @@ pub enum EventType<'a> {
     MainAlreadyDownloaded(&'a ModInfo),
     MainDownloading(&'a ModInfo),
     MainDownloaded(&'a ModInfo),
-    MainError(&'a ModInfo),
+    MainError(&'a ModInfo, &'a DownloadError),
     DepAlreadyDownloaded(&'a ModInfo),
     DepDownloading(&'a ModInfo),
     DepDownloaded(&'a ModInfo),
-    DepError(&'a ModInfo),
+    DepError(&'a ModInfo, &'a DownloadError),
 }
 
 pub async fn download_all<F: Fn(EventType)>(
@@ -108,11 +108,13 @@ pub async fn download_all<F: Fn(EventType)>(
             }
 
             on_event(MainDownloading(&first));
-            if let Ok(()) = download(&first.download_url, &first.file_name).await {
-                already_downloaded.push(first.id);
-                on_event(MainDownloaded(&first));
-            } else {
-                on_event(MainError(&first));
+
+            match download(&first.download_url, &first.file_name).await {
+                Ok(_) => {
+                    already_downloaded.push(first.id);
+                    on_event(MainDownloaded(&first));
+                }
+                Err(e) => on_event(MainError(&first, &e)),
             }
 
             for r in rest {
@@ -122,11 +124,12 @@ pub async fn download_all<F: Fn(EventType)>(
                 }
 
                 on_event(DepDownloading(&r));
-                if let Ok(()) = download(&r.download_url, &r.file_name).await {
-                    already_downloaded.push(r.id);
-                    on_event(DepDownloaded(&r));
-                } else {
-                    on_event(DepError(&r));
+                match download(&r.download_url, &r.file_name).await {
+                    Ok(_) => {
+                        already_downloaded.push(r.id);
+                        on_event(DepDownloaded(&r));
+                    }
+                    Err(e) => on_event(DepError(&r, &e)),
                 }
             }
         }

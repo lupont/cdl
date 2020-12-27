@@ -125,11 +125,11 @@ async fn handle_search(cdl: Cdl, config: Config) -> Result<(), cdl_lib::Download
             MainAlreadyDownloaded(info) => {
                 println!("<== {} is already downloaded.", info.file_name)
             }
-            MainError(_) => println!("errored."),
+            MainError(_, _) => println!("errored."),
             DepDownloading(info) => print!("    Downloading {}... ", info.file_name),
             DepDownloaded(_) => println!("done!"),
             DepAlreadyDownloaded(info) => println!("    {} is already downloaded.", info.file_name),
-            DepError(_) => println!("errored."),
+            DepError(_, _) => println!("errored."),
         }
     })
     .await?;
