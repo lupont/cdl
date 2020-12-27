@@ -66,9 +66,15 @@ impl From<surf::Error> for DownloadError {
 }
 
 pub async fn download(url: &str, file_name: &str) -> Result<(), DownloadError> {
+    // The url from the API references an endpoint that redirects
+    // to the same url but with the prefix changed. reqwest handled
+    // this fine, but surf seems to not follow the redirect.
+    let tmp = surf::get(&url).await?;
+    let foo = tmp.header("location");
+    let url = foo.map(|h| h.as_str()).unwrap_or(&url);
+    let source = surf::get(&url).recv_bytes().await?;
     let mut dest = File::create(file_name)?;
-    let mut source = &surf::get(url).await?.body_bytes().await?[..];
-    io::copy(&mut source, &mut dest)?;
+    io::copy(&mut source.as_slice(), &mut dest)?;
     Ok(())
 }
 
@@ -76,9 +82,11 @@ pub enum EventType<'a> {
     MainAlreadyDownloaded(&'a ModInfo),
     MainDownloading(&'a ModInfo),
     MainDownloaded(&'a ModInfo),
+    MainError(&'a ModInfo),
     DepAlreadyDownloaded(&'a ModInfo),
     DepDownloading(&'a ModInfo),
     DepDownloaded(&'a ModInfo),
+    DepError(&'a ModInfo),
 }
 
 pub async fn download_all<F: Fn(EventType)>(
@@ -100,6 +108,8 @@ pub async fn download_all<F: Fn(EventType)>(
             if let Ok(()) = download(&first.download_url, &first.file_name).await {
                 already_downloaded.push(first.id);
                 on_event(MainDownloaded(&first));
+            } else {
+                on_event(MainError(&first));
             }
 
             for r in rest {
@@ -112,6 +122,8 @@ pub async fn download_all<F: Fn(EventType)>(
                 if let Ok(()) = download(&r.download_url, &r.file_name).await {
                     already_downloaded.push(r.id);
                     on_event(DepDownloaded(&r));
+                } else {
+                    on_event(DepError(&r));
                 }
             }
         }
@@ -122,7 +134,7 @@ pub async fn download_all<F: Fn(EventType)>(
 #[async_recursion::async_recursion]
 async fn get_with_dependencies(game_version: &str, mod_id: u32) -> surf::Result<Vec<ModInfo>> {
     let url = url::mod_url(mod_id);
-    let result = surf::get(&url).await?.body_json::<SearchResult>().await?;
+    let result = surf::get(&url).recv_json::<SearchResult>().await?;
 
     let file_id = result
         .get_file_by_version(game_version)
@@ -133,8 +145,7 @@ async fn get_with_dependencies(game_version: &str, mod_id: u32) -> surf::Result<
     }
 
     let file = surf::get(&url::info_url(result.id, file_id.unwrap()))
-        .await?
-        .body_json::<ModInfo>()
+        .recv_json::<ModInfo>()
         .await?;
 
     let mut mods: Vec<ModInfo> = vec![];
