@@ -67,11 +67,14 @@ impl From<surf::Error> for DownloadError {
 
 pub async fn download(url: &str, file_name: &str) -> Result<(), DownloadError> {
     // The url from the API references an endpoint that redirects
-    // to the same url but with the prefix changed. reqwest handled
+    // to another url for downloading. reqwest handled
     // this fine, but surf seems to not follow the redirect.
+    // Thus, one request is made in order to find the "real" url,
+    // before sending a GET to it.
     let tmp = surf::get(&url).await?;
-    let foo = tmp.header("location");
-    let url = foo.map(|h| h.as_str()).unwrap_or(&url);
+    let loc = tmp.header("location");
+    let url = loc.map(|h| h.as_str()).unwrap_or(&url);
+
     let source = surf::get(&url).recv_bytes().await?;
     let mut dest = File::create(file_name)?;
     io::copy(&mut source.as_slice(), &mut dest)?;
