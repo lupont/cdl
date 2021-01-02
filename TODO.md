@@ -9,3 +9,4 @@
 * Metadata-file for listing mods in an "instance"
 * Don't redownload mods that already have been downloaded in the instance
 * Navigate list of mods interactively
+* Save "instance" metadata, this will allow to update all mods and more
