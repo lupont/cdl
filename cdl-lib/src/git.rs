@@ -100,8 +100,16 @@ fn pull(repo: &Repository, branch_name: &str) -> Result<()> {
 }
 
 pub fn clone(url: &str) -> Result<Repository> {
-    let full_url = format!("https://github.com/{}", url);
-    let local_dir = Path::join(Path::new("/tmp/cdl/"), url);
+    // let full_url = format!("https://github.com/{}", url);
+    let url = if !url.starts_with("https://") {
+        format!("https://{}", url)
+    } else {
+        url.into()
+    };
+    let local_dir = Path::join(
+        Path::new("/tmp/cdl/"),
+        &url.replace("https://", "").replace('/', "__"),
+    );
 
     if let Ok(repo) = Repository::open(&local_dir) {
         println!("opening repo");
@@ -110,7 +118,7 @@ pub fn clone(url: &str) -> Result<Repository> {
         return Ok(repo);
     }
 
-    Repository::clone(&full_url, &local_dir).map_err(|e| {
+    Repository::clone(&url, &local_dir).map_err(|e| {
         println!("caught error");
         GitError::from(e)
     })
