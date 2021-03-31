@@ -117,7 +117,7 @@ impl SearchResult {
     pub fn is_fabric(&self) -> bool {
         self.categories
             .iter()
-            .any(|c| c.category_id == Category::fabric_id())
+            .any(|c| c.category_id == Category::FABRIC_ID)
     }
 }
 
@@ -137,9 +137,7 @@ pub struct Category {
 }
 
 impl Category {
-    pub fn fabric_id() -> u32 {
-        4780
-    }
+    pub const FABRIC_ID: u32 = 4780;
 }
 
 #[derive(Debug, Deserialize)]
